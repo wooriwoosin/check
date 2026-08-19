@@ -57,7 +57,7 @@
 
   function runChecks(all, keep) {
     var mk = R.mobileKtCustomers(all);
-    var findings = { bundle: [], dueDate: [], sangbu: [], seller: [], oss: [], product: [], subNo: [] };
+    var findings = { bundle: [], dueDate: [], sangbu: [], seller: [], oss: [], ossList: [], product: [], subNo: [] };
 
     // 접점코드 → 상부점 매핑을 데이터에서 학습 (다수결)
     var map = {};
@@ -76,6 +76,17 @@
       if (R.nameTags(r).some(function (t) { return t.toUpperCase() === 'OSS'; })) tagged[R.customerKey(r)] = r;
       if (R.normalizeProduct(r['상품옵션']) === '원스톱해지') hasLine[R.customerKey(r)] = r;
     });
+    /* OSS(원스톱전환)는 신규 검수 항목.
+       웹의 원스톱해지 라인과 KOS 원스톱 로우데이터의 수량이 맞아야 한다. */
+    keep.forEach(function (r) {
+      if (R.normalizeProduct(r['상품옵션']) !== '원스톱해지') return;
+      var svc = R.serviceNo(r['가입.번호']);
+      r._ossKey = svc.length >= 8 ? svc.slice(0, 4) + svc.slice(-4) : '';
+      if (!r._ossKey) r._ossNote = '가입.번호에서 원스톱 키를 만들 수 없음';
+      else if (svc.length !== 11) r._ossNote = '서비스번호가 ' + svc.length + '자리 — 키가 어긋날 수 있음';
+      else r._ossNote = '';
+      findings.ossList.push(r);
+    });
 
     keep.forEach(function (r) {
       r._bundle = R.judgeBundle(r, mk);
@@ -91,13 +102,32 @@
       }
 
       var k = r['접점코드'] || '(미기재)';
-      if (major[k] && r['상부점'] !== major[k]) {
+      var sb = r['상부점'] || '';
+      /* 상부점이 온라인이면 접점도 온라인이어야 한다 (양방향).
+         도매 하위 접점은 여러 개라 1차에서 못 가리므로 2차에서 KOS 접점명과 대조한다. */
+      if (/온라인/.test(sb) !== /온라인/.test(k)) {
+        r._sangbu = /온라인/.test(sb)
+          ? '상부점이 온라인인데 접점코드가 "' + k + '"'
+          : '접점코드가 온라인인데 상부점이 "' + (sb || '(빈값)') + '"';
+        findings.sangbu.push(r);
+      } else if (major[k] && sb !== major[k]) {
         r._sangbu = '접점코드 ' + k + ' 의 통상 상부점은 "' + major[k] + '"';
         findings.sangbu.push(r);
       }
 
-      if (/[□■]/.test(r['협력점'] || '') && (r['접수경로'] || '').trim() !== '5.판매점☆') {
-        r._seller = '협력점에 판매점 표기가 있는데 접수경로가 "' + (r['접수경로'] || '(빈값)') + '"';
+      /* 협력점명 마커 → 접수경로
+         ☆ 또는 ★ 이면 협력점, □ 또는 ■ 이면 판매점.
+         마커가 없으면 온라인 유입(인스타·유튜브 등)이라 검증 대상이 아니다. */
+      var q = r['협력점'] || '', ax = (r['접수경로'] || '').trim();
+      var star = /[☆★]/.test(q), box = /[□■]/.test(q);
+      if (star && box) {
+        r._seller = '협력점명에 ☆★ 와 □■ 가 함께 있음 — 협력점/판매점 구분 불가';
+        findings.seller.push(r);
+      } else if (star && ax.indexOf('협력점') < 0) {
+        r._seller = '협력점명이 ☆★ 표기인데 접수경로가 "' + (ax || '(빈값)') + '" — 협력점이어야 함';
+        findings.seller.push(r);
+      } else if (box && ax.indexOf('판매점') < 0) {
+        r._seller = '협력점명이 □■ 표기인데 접수경로가 "' + (ax || '(빈값)') + '" — 판매점이어야 함';
         findings.seller.push(r);
       }
 

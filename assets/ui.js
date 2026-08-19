@@ -98,7 +98,13 @@
           ['접수경로', '접수경로'], ['사유', '_seller', 'wrap']]
       },
       {
-        key: 'oss', label: 'OSS 정합', rows: c.oss, tone: 'c',
+        key: 'ossl', label: 'OSS(원스톱전환)', rows: c.ossList, tone: 'c',
+        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'],
+          ['가입.번호', '가입.번호'], ['원스톱키', '_ossKey'], ['개통상태', '개통상태'],
+          ['비고', '_ossNote', 'wrap']]
+      },
+      {
+        key: 'oss', label: 'OSS 태그 정합', rows: c.oss, tone: 'c',
         cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['상품옵션', '상품옵션'],
           ['개통상태', '개통상태'], ['사유', '_oss', 'wrap']]
       },
@@ -133,6 +139,7 @@
       card(S.drop.length, '이관 제외', ''),
       card(byCustomer(bundleRows(c.bundle, '결합대상')).length, '결합대상 (고객)', 'danger'),
       card(byCustomer(bundleRows(c.bundle, '확인필요')).length, '결합 확인필요 (고객)', 'warn'),
+      card(c.ossList.length, 'OSS 라인 (수량대사)', ''),
       card(webErr, '1차 검수 지적', webErr ? 'warn' : 'ok')
     ].join('');
 
@@ -190,12 +197,12 @@
 
   $('#dl').addEventListener('click', function () {
     var c = S.checks;
-    var blob = E.build(S.keep, {
+    var blob = E.build(S.keep, S.checks.ossList, {
       keep: S.keep.length, drop: S.drop.length,
       bundleTarget: byCustomer(bundleRows(c.bundle, '결합대상')).length,
       bundleCheck: byCustomer(bundleRows(c.bundle, '확인필요')).length,
       webError: c.dueDate.length + c.sangbu.length + c.seller.length + c.product.length + c.subNo.length + c.oss.length,
-      now: new Date().toLocaleString('ko-KR'), fileName: S.fileName
+      ossLines: c.ossList.length, now: new Date().toLocaleString('ko-KR'), fileName: S.fileName
     });
     save(blob, 'KT검수_이관_' + stamp() + '.xlsx');
   });

@@ -90,6 +90,33 @@
     return { name: name, rows: rows, headerRows: tpl.dataRow - 1 };
   }
 
+  /* OSS(원스톱전환) 대사 시트 — 신규 검수 항목.
+     웹의 원스톱해지 라인과 KOS 원스톱 로우데이터를 1:1 로 맞춰본다. */
+  function ossSheet(ossLines) {
+    var rows = [
+      ['OSS(원스톱전환) 수량 대사'],
+      ['웹 원스톱해지(OSS) 라인', ossLines.length, '건'],
+      ['KOS 원스톱 붙여넣은 행', { f: '=COUNTIF(원스톱!$Q$2:$Q$' + (1 + PASTE_ROWS) + ',"?*")' }, '건'],
+      ['차이', { f: '=$B2-$B3' }, '건  ← 0 이어야 정상'],
+      ['웹에만 있음 (원스톱 미접수)', { f: '=COUNTIF($F$7:$F$' + (6 + ossLines.length) + ',"원스톱없음")' }, '건'],
+      [],
+      ['웹 행', '고객명', '가입.번호', '원스톱키', '개통상태', '원스톱전환상태', '오더상태', '비고']
+    ];
+    ossLines.forEach(function (r, i) {
+      var n = 8 + i;
+      rows.push([
+        r._r, r['고객명'] || '', r['가입.번호'] || '', r._ossKey || '', r['개통상태'] || '',
+        { f: '=IF($D' + n + '="","키없음",IFERROR(INDEX(원스톱!$I:$I,MATCH($D' + n + ',원스톱!$Q:$Q,0)),"원스톱없음"))' },
+        { f: '=IF($D' + n + '="","",IFERROR(INDEX(원스톱!$K:$K,MATCH($D' + n + ',원스톱!$Q:$Q,0)),""))' },
+        r._ossNote || ''
+      ]);
+    });
+    return {
+      name: 'OSS대사', rows: rows, headerRows: 1,
+      cols: [8, 24, 28, 11, 10, 18, 10, 30]
+    };
+  }
+
   function guideSheet(stats) {
     var L = [
       ['KT전산 2차 검수 — 사용법'], [],
@@ -99,16 +126,23 @@
       ['', '  · 원스톱 ← KOS 원스톱      (2행부터 붙여넣기)'], [],
       ['2', '붙여넣으면 "웹" 시트의 2차 검수 열이 자동으로 계산됩니다. 매크로 실행 버튼이 없습니다.'], [],
       ['3', '"웹" 시트에서 [2차판정] 열을 "확인필요" 로 필터링하면 볼 것만 남습니다.'], [],
+      ['4', '"접수" 시트 AZ열을 "웹없음" 으로 필터링하면 KOS 에만 있는 접수건이 나옵니다.'],
+      ['', '  (기존 매크로의 "웹미존재_접수건" 시트와 같은 역할)'], [],
+      ['5', '"OSS대사" 시트에서 웹 원스톱해지 라인과 KOS 원스톱 수량이 맞는지 확인합니다.'],
+      ['', '  · [차이] 가 0 이 아니면 어느 한쪽이 빠진 것입니다.'],
+      ['', '  · [원스톱전환상태] 가 "원스톱없음" 이면 KOS 에 접수가 안 된 건입니다.'],
+      ['', '  · "원스톱" 시트 R열이 "웹없음" 이면 KOS 에만 있는 건입니다.'], [],
       ['주의', '각 시트 오른쪽 끝의 보조열(회색 머리글)은 지우지 마세요. 매칭 키를 만드는 수식입니다.'],
-      ['', '  · 접수  AV=키8, AW=전화앞5, AX=상품정규화, AY=복합키'],
+      ['', '  · 접수  AV=키8, AW=전화앞5, AX=상품정규화, AY=복합키, AZ=웹 매칭여부'],
       ['', '  · 결합  U=생년월일6'],
-      ['', '  · 원스톱 Q=서비스번호키(앞4+뒤4)'], [],
+      ['', '  · 원스톱 Q=서비스번호키(앞4+뒤4), R=웹 매칭여부'], [],
       ['참고', '붙여넣기 여유 행은 ' + PASTE_ROWS + '행입니다. 더 많으면 보조열 수식을 아래로 끌어 채우세요.'], [],
       ['── 1차 웹 검수 결과 ──'],
       ['이관 대상', stats.keep + '건'],
       ['이관 제외', stats.drop + '건  (타 통신사 / 업셀링·약정갱신 / 대성 상부점)'],
       ['결합대상', stats.bundleTarget + '명  ← 전산 넘기기 전에 결합 처리 필요'],
       ['결합 확인필요', stats.bundleCheck + '명'],
+      ['OSS 라인', stats.ossLines + '건  ← KOS 원스톱 수량과 맞아야 함'],
       ['1차 오류', stats.webError + '건  (개통기한 / 상부점 / 판매점 / 상품매핑 / 가입번호)'], [],
       ['생성일시', stats.now],
       ['원본 파일', stats.fileName]
@@ -116,7 +150,7 @@
     return { name: '사용법', rows: L, headerRows: 1, cols: [14, 70] };
   }
 
-  function build(keep, stats) {
+  function build(keep, ossLines, stats) {
     var web = [WEB_COLS.map(function (c) { return c[0]; })];
     keep.forEach(function (r, i) { web.push(webRow(r, i + 2)); });
 
@@ -130,14 +164,21 @@
         { col: 48, title: '키8', formula: '=IF($X#="","",IFERROR(MID($X#,FIND("!",$X#)+1,8),LEFT($X#,8)))' },
         { col: 49, title: '전화앞5', formula: '=IF($AF#="","",LEFT(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE($AF#,"-","")," ",""),"*",""),5))' },
         { col: 50, title: '상품정규화', formula: '=IF($AK#="","",SUBSTITUTE(SUBSTITUTE(SUBSTITUTE($AK#,"지니",""),"인터넷","")," ",""))' },
-        { col: 51, title: '복합키', formula: '=IF($AV#="","",$AV#&"|"&$AX#)' }
+        { col: 51, title: '복합키', formula: '=IF($AV#="","",$AV#&"|"&$AX#)' },
+        {
+          col: 52, title: '웹 매칭여부',
+          formula: '=IF($AV#="","",IF(COUNTIFS(웹!$R:$R,$AV#,웹!$V:$V,$AX#)>0,"O",' +
+            'IF(COUNTIF(웹!$R:$R,$AV#)>0,"상품상이","웹없음")))'
+        }
       ]),
       kosSheet('결합', [
         { col: 21, title: '생년월일6', formula: '=IF($R#="","",RIGHT("000000"&$R#,6))' }
       ]),
       kosSheet('원스톱', [
-        { col: 17, title: '서비스번호키', formula: '=IF($H#="","",IFERROR(MID($H#,FIND("!",$H#)+1,4),LEFT($H#,4))&RIGHT($H#,4))' }
+        { col: 17, title: '서비스번호키', formula: '=IF($H#="","",IFERROR(MID($H#,FIND("!",$H#)+1,4),LEFT($H#,4))&RIGHT($H#,4))' },
+        { col: 18, title: '웹 매칭여부', formula: '=IF($Q#="","",IF(COUNTIF(OSS대사!$D:$D,$Q#)>0,"O","웹없음"))' }
       ]),
+      ossSheet(ossLines),
       guideSheet(stats)
     ];
     return X.build(sheets);
