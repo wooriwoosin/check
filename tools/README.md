@@ -6,11 +6,20 @@
 | 파일 | 용도 |
 |---|---|
 | `parse_web.py` | 웹 로우데이터(`전체고객상품*.xls`, 실제로는 HTML/cp949) 파싱 |
-| `bundle_rules.py` | 결합 판정 규칙 프로토타입 (모바일_KT 교차조회 / 결합 필드 파싱 / 속성태그) |
+| `kt_filter.py` | KT전산 이관 대상 필터 (상품명 화이트리스트 + 상부점 제외) |
+| `bundle_rules.py` | 결합 판정 규칙 (유무선결합 / 유선전화결합, 노이즈 4종 제거) |
 
 ```bash
 pip install beautifulsoup4 lxml
-python3 -c "from parse_web import load; h,d=load('전체고객상품.xls'); print(len(d))"
+python3 -c "
+from parse_web import load
+from kt_filter import split
+from bundle_rules import judge, mobile_kt_customers
+h, rows = load('전체고객상품.xls')
+keep, drop = split(rows)
+mk = mobile_kt_customers(rows)
+print(len(rows), len(keep), sum(judge(r, mk)['verdict'] == '결합대상' for r in keep))
+"
 ```
 
 ⚠️ 로우데이터 파일 자체는 개인정보라 커밋하지 않습니다 (`.gitignore` 참고).

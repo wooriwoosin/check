@@ -25,11 +25,8 @@
 """
 import re
 
-KT_WIRE_PRODUCTS = {
-    'KT_인터넷', 'KT_TV', 'KT_티_업셀링/전환', 'KT_인_업셀링/전환',
-    'KT_TV(약정갱신)', 'KT_인터넷(약정갱신)', 'KT_인터넷전화', 'KT_일반전화',
-    '유선기타_(KT-biz)인터넷', '유선기타_(KT-biz)인터넷전화',
-}
+# 결합 검수 대상 = KT전산 이관 대상 (kt_filter.INCLUDE_PRODUCTS 와 동일)
+from kt_filter import INCLUDE_PRODUCTS as KT_WIRE_PRODUCTS  # noqa: E402
 
 # ── 노이즈: '결합'/'모바일' 이 들어가지만 결합 신호가 아닌 문구 ──────────────
 NOISE = [
@@ -66,6 +63,10 @@ WIRELESS_BUNDLE = [
     '정액결합', '모바일결합', '머바일결합', '모결',
 ]
 NAME_TAGS = {'모', '(모)', '모결', '결'}
+
+# 타사 결합상품명 — KT 건에 적혀 있어도 우리 결합 대상이 아니다
+OTHER_CARRIER_BUNDLE = ['요즘가족결합', '요즘 가족 결합', '요가결',
+                        '참쉬운가족결합', '가족무한사랑', '투게더']
 
 # ── 유형2: 유선전화 결합 흔적 ───────────────────────────────────────────
 LANDLINE_KW = re.compile(
@@ -164,6 +165,10 @@ def judge(row, mobile_kt_keys=frozenset()):
     if any(any(p in v.replace(' ', '') for p in
                [x.replace(' ', '') for x in SELF_SERVE]) for v in field_vals):
         return _r('해당없음', None, [], '고객이 직접 진행 — 우리가 안 걸어줌', standalone)
+    other = [v for v in field_vals
+             if any(o.replace(' ', '') in v.replace(' ', '') for o in OTHER_CARRIER_BUNDLE)]
+    if other:
+        return _r('해당없음', None, [], f'타사 결합상품({other[0]}) — KT 결합 아님', standalone)
 
     flat = text.replace(' ', '')
     reasons, btype = [], None
@@ -194,6 +199,13 @@ def judge(row, mobile_kt_keys=frozenset()):
         reasons.extend(landline)
         btype = '유무선+유선전화결합' if btype == '유무선결합' else '유선전화결합'
 
+    # ── 향후 가입 후 결합 예정 → 지금은 대상 아님 ──────────────────────
+    #    단, 결합상품이 명시됐거나 기존 KT 번호가 적혀 있으면 진짜 요청으로 본다
+    only_future = all(re.search(r'예정|추후|나중', v) for v in field_vals) if field_vals else True
+    if FUTURE.search(text) and only_future and not _kt_mobile_near_bundle(text):
+        return _r('해당없음', None, reasons,
+                  '향후 가입 후 결합 예정 — 현재 대상 아님', standalone)
+
     # ── 분류 안 된 결합 필드값 ──────────────────────────────────────
     leftover = [v for v in field_vals
                 if not any(k.replace(' ', '') in v.replace(' ', '') for k in WIRELESS_BUNDLE)]
@@ -203,19 +215,13 @@ def judge(row, mobile_kt_keys=frozenset()):
     if not reasons:
         return _r('해당없음', None, [], None, standalone)
 
-    # ── 향후 가입 후 결합 예정 → 지금은 대상 아님 ──────────────────────
-    #    단, 결합상품이 명시됐거나 기존 KT 번호가 적혀 있으면 진짜 요청으로 본다
-    if FUTURE.search(text) and not field_vals and not _kt_mobile_near_bundle(text):
-        return _r('해당없음', None, reasons,
-                  '향후 가입 후 결합 예정 — 현재 대상 아님', standalone)
-
-    # ── 명의자 통신사가 KT가 아니면 확인필요 ────────────────────────────
-    #    (본인인증만 다른 폰으로 했을 수 있어 제외하지는 않는다)
+    # ── 명의자 통신사가 KT가 아니면 유무선결합 불가 ──────────────────────
+    #    유선전화 결합(유형2)은 휴대폰 통신사와 무관하므로 이 규칙을 타지 않는다
     if btype == '유무선결합' and not _kt_mobile_near_bundle(text):
         if carrier_of_customer(row, text) == '타사':
-            return _r('확인필요', btype,
-                      reasons + [f'명의자 통신사가 KT 아님({auth or "미기재"}) — KT 회선 확인 필요'],
-                      None, standalone)
+            return _r('해당없음', btype, reasons,
+                      f'명의자 통신사가 KT 아님({auth or "미기재"}) — KT 유무선결합 불가',
+                      standalone)
 
     return _r('결합대상', btype, reasons, None, standalone)
 
