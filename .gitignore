@@ -1,0 +1,8 @@
+# 로우데이터/개인정보 파일 커밋 금지
+*.xls
+*.xlsx
+*.xlsm
+!docs/**/*.md
+
+.DS_Store
+node_modules/
