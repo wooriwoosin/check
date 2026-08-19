@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KT 검수 — 1차 웹 검수</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header>
+  <h1>KT 검수 — 1차 웹 검수</h1>
+  <p>웹 로우데이터로 먼저 걸러내고, KT전산으로 넘길 파일을 만듭니다. 파일은 브라우저 안에서만 처리되며 어디로도 전송되지 않습니다.</p>
+</header>
+
+<main>
+  <section class="panel">
+    <h2>1. 웹 로우데이터 올리기</h2>
+    <p class="sub">우리 어드민에서 받은 <code>전체고객상품(YYYYMMDDHHMM).xls</code> 파일</p>
+    <div id="drop" tabindex="0" role="button">
+      <strong>파일을 끌어다 놓거나 클릭해서 선택</strong>
+      <span>.xls / .xlsx / .html</span>
+    </div>
+    <input type="file" id="file" accept=".xls,.xlsx,.html,.htm" class="hidden">
+    <div id="err" class="note err hidden"></div>
+  </section>
+
+  <section id="result" class="hidden">
+    <div class="panel">
+      <h2>2. 검수 결과</h2>
+      <p class="sub" id="fileinfo"></p>
+      <div class="cards" id="cards"></div>
+    </div>
+
+    <div class="panel">
+      <h2>3. 확인할 항목</h2>
+      <p class="sub">탭을 눌러 항목별로 봅니다.</p>
+      <div class="tabs" id="tabs"></div>
+      <div id="tablearea"></div>
+    </div>
+
+    <div class="panel">
+      <h2>4. KT전산으로 넘길 파일 만들기</h2>
+      <p class="sub">
+        이관 제외 건은 빠지고, 통과한 건만 <code>웹</code> 시트에 들어갑니다.
+        <code>접수</code>·<code>결합</code>·<code>원스톱</code> 시트에 KOS 데이터를 붙여넣으면 2차 검수가 자동으로 계산됩니다.
+      </p>
+      <div class="row">
+        <button class="go" id="dl">이관 파일 다운로드 (.xlsx)</button>
+        <button class="go ghost" id="dlx">이관 제외 목록 다운로드</button>
+      </div>
+      <div class="note">
+        <b>결합대상으로 잡힌 건은 전산에 넘기기 전에 결합을 걸어주세요.</b>
+        전산에서는 셋트유형이 단독이면 무조건 <code>결합 X</code> 로 잡혀서 여기서 못 걸면 놓칩니다.
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="assets/xlsx.js"></script>
+<script src="assets/kos-templates.js"></script>
+<script src="assets/rules.js"></script>
+<script src="assets/app.js"></script>
+<script src="assets/export.js"></script>
+<script src="assets/ui.js"></script>
+</body>
+</html>
