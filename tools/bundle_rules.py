@@ -2,19 +2,26 @@
 """
 결합 검수 규칙 (웹 1차) — 프로토타입
 
-검수 대상:
-  KT 유선 신규 중 셋트유형이 '단독*' 인데, 실제로는 결합을 걸어줘야 하는 건.
-  (전산에서는 셋트유형 단독 = 무조건 결합X 로 잡히므로 웹에서 먼저 걸러야 함)
+검수 대상: KT 유선 전체 (셋트유형 무관)
+
+  셋트유형(DPS/단독)은 '유선끼리 묶음' 축이고, 모바일결합은 그와 별개 축이다.
+  DPS(인터넷+TV 동시가입) 건에도 "기존 KT 휴대폰과 묶어달라"는 요청이 들어올 수 있으므로
+  단독/DPS 구분 없이 전 건을 훑는다.
 
 결합 유형 2가지:
-  유형1 (유무선결합) 기존에 쓰던 KT 휴대폰 + 유선신규 → 결합
-  유형2 (유선전화결합) 기존에 쓰던 KT 일반전화/인터넷전화 + 유선신규 → 결합
+  유형1 (유무선결합)  기존에 쓰던 KT 휴대폰 + 유선신규 → 결합
+                     ※ KT망 알뜰폰(MVNO)도 결합 대상. 우리가 묶어줘야 함
+  유형2 (유선전화결합) 기존에 쓰던 KT 일반전화(02·0XX)/인터넷전화(070) + 유선신규 → 결합
 
-제외 대상:
-  - 패밀리 계열 : 유선+유선 결합이라 KT전산 로우데이터로 확인 불가
-  - 모바일_KT 동시가입 : 유선/무선 동시가입 건은 별도 검수 프로세스
+셋트유형별 처리:
+  단독*  → 전산에서 무조건 '결합X' 로 잡히므로, 요청이 있으면 웹에서 반드시 잡아야 함 (우선순위 높음)
+  DPS*   → 전산 결합리스트와 대조 가능. 요청이 있는데 결합리스트에 없으면 누락 (참고용)
+
+검수 제외:
+  - 패밀리 계열     : 유선+유선 결합이라 KT전산 로우데이터로 확인 불가
+  - 모바일_KT       : 유선/무선 동시가입 건은 별도 검수 프로세스
+  - 고객별도진행/고객센터 안내 : 고객이 직접 처리 → 우리가 안 걸어줌
   - '앞으로 KT 휴대폰 가입해서 결합 예정' : 아직 결합 대상 아님
-  - 알뜰폰(KT망 MVNO) : KT 유무선결합 대상이 아니므로 확인필요로 분리
 """
 import re
 
@@ -32,8 +39,20 @@ NOISE = [
     '이마트모바일', '이마트 모바일', '모바일 상품권', '모바일 다이소',
     '결합전', '결합 전', '결합후', '결합 후',
 ]
+# 서식지의 '보기 목록' — 결합상품명이 전부 나열돼 있어 키워드가 통째로 걸린다.
+#   예) · 결합유형 (프가=1/ 프싱=2/ 총액=3/ 정액=4/ 신혼미리결합=5) :1
+# 목록 부분은 지우고, 뒤에 선택된 번호만 값으로 해석한다.
+CHOICE_LIST = re.compile(r'결합유형\s*\(([^)]*=\s*\d[^)]*)\)\s*[:：]?\s*([0-9]?)')
+CHOICE_MAP = {'1': '프리미엄가족결합', '2': '프리미엄싱글', '3': '총액결합',
+              '4': '정액결합', '5': '신혼미리결합'}
+
+# 향후 가입 후 결합 예정 → 지금은 대상 아님
+FUTURE = re.compile(r'(나중에|추후|이후에|다음에)[^\n]{0,20}결합|결합[^\n]{0,12}(예정|하기로)')
 # 결합을 명시적으로 부정하는 문구
 NEG_PHRASE = ['결합불가', '결합 불가', '결합안됨', '결합 안됨']
+# 고객이 직접 처리 → 우리가 안 걸어줌 (검수 대상 아님)
+SELF_SERVE = ['고객별도진행', '고객 별도진행', '고객별도 진행', '고객센터 안내', '고객센터안내',
+              '고객센터 문의', '본인진행', '고객직접']
 NEG_VALUE = re.compile(r'^(x|X|없음|미신청|불가|해당없음|무|-)\s*$')
 
 # ── 패밀리(유선+유선) → 검수 제외 ────────────────────────────────────────
@@ -49,7 +68,10 @@ WIRELESS_BUNDLE = [
 NAME_TAGS = {'모', '(모)', '모결', '결'}
 
 # ── 유형2: 유선전화 결합 흔적 ───────────────────────────────────────────
-LANDLINE_KW = re.compile(r'전화\s*[12]\s*[:：]|기존\s*번호|기존번호|팩스용')
+LANDLINE_KW = re.compile(
+    r'전화\s*[12]\s*[:：]|기존\s*번호|기존번호|팩스용|일반전화|인터넷전화|집전화')
+# 해지 대상 회선(이전 통신사)이 적히는 줄 — 결합 근거로 쓰면 안 된다
+PREV_CARRIER_LINE = re.compile(r'전\s*통신사|이전\s*통신사|기존\s*통신사|전통신사')
 LANDLINE_NO = re.compile(
     r'\b(070[-\s.]?\d{3,4}[-\s.]?\d{4}'
     r'|0(?:2|3[1-3]|4[1-4]|5[1-5]|6[1-4])[-\s.]?\d{3,4}[-\s.]?\d{4})\b')
@@ -64,9 +86,25 @@ KT_MOBILE = re.compile(r'01[016-9][-\s.]?\d{3,4}[-\s.]?\d{4}[^\n]{0,12}?(KT|kt|K
 
 
 def strip_noise(text):
+    """결합 신호를 가리는 문구 제거. 서식지 보기목록은 선택된 값으로 치환."""
+    text = CHOICE_LIST.sub(
+        lambda m: '결합: ' + CHOICE_MAP.get(m.group(2), '') if m.group(2) else '', text)
     for n in NOISE:
         text = text.replace(n, '')
     return text
+
+
+def carrier_of_customer(row, text):
+    """명의자가 현재 쓰는 통신사. KT가 아니면 유무선결합이 성립하지 않아 확인 대상."""
+    auth = str(row.get('고객인증(값)') or '')
+    lines = [l for l in text.split('\n')
+             if re.search(r'기존\s*통신사|연락처.*통신사|인증통신사', l)]
+    hay = auth + '\n' + '\n'.join(lines)
+    if re.search(r'KT|kt|Kt', hay):
+        return 'KT'
+    if re.search(r'SK|sk|Sk|LG|lg|엘지|U\+', hay):
+        return '타사'
+    return '불명'
 
 
 def digits(v):
@@ -91,27 +129,29 @@ def name_tags(row):
 
 
 def judge(row, mobile_kt_keys=frozenset()):
-    """단독 KT유선 1행을 판정.
+    """KT 유선 1행을 판정 (셋트유형 무관).
 
-    반환: dict(verdict, type, reasons, excluded_by)
-      verdict : '결합대상' | '확인필요' | '정상단독'
-      type    : '유무선결합' | '유선전화결합' | None
+    반환: dict(verdict, type, reasons, excluded_by, standalone)
+      verdict   : '결합대상' | '확인필요' | '해당없음'
+      type      : '유무선결합' | '유선전화결합' | None
+      standalone: 셋트유형이 단독 계열인지 (True면 전산에서 결합X로 잡히므로 우선순위 높음)
     """
     raw = str(row.get('기타') or '')
     opt = str(row.get('상품옵션') or '')
     auth = str(row.get('고객인증(값)') or '')
     tags = name_tags(row)
+    standalone = str(row.get('셋트유형') or '').startswith('단독')
 
     # ── 제외 판정 ──────────────────────────────────────────────────
     if customer_key(row) in mobile_kt_keys:
-        return _r('정상단독', None, [], '모바일_KT 동시가입(별도 검수)')
+        return _r('해당없음', None, [], '모바일_KT 동시가입(별도 검수)', standalone)
     if any(f in opt for f in FAMILY):
-        return _r('정상단독', None, [], f'패밀리 상품({opt}) — 유선+유선결합')
+        return _r('해당없음', None, [], f'패밀리 상품({opt}) — 유선+유선결합', standalone)
 
     text = strip_noise(raw)
     for p in NEG_PHRASE:
         if p in text:
-            return _r('정상단독', None, [], f'명시적 부정({p})')
+            return _r('해당없음', None, [], f'명시적 부정({p})', standalone)
 
     # '결합:' 필드값
     field_vals = []
@@ -120,7 +160,10 @@ def judge(row, mobile_kt_keys=frozenset()):
         if v and not NEG_VALUE.match(v):
             field_vals.append(v)
     if any(any(f in v for f in FAMILY) for v in field_vals):
-        return _r('정상단독', None, [], '결합 필드값이 패밀리 — 유선+유선결합')
+        return _r('해당없음', None, [], '결합 필드값이 패밀리 — 유선+유선결합', standalone)
+    if any(any(p in v.replace(' ', '') for p in
+               [x.replace(' ', '') for x in SELF_SERVE]) for v in field_vals):
+        return _r('해당없음', None, [], '고객이 직접 진행 — 우리가 안 걸어줌', standalone)
 
     flat = text.replace(' ', '')
     reasons, btype = [], None
@@ -141,33 +184,64 @@ def judge(row, mobile_kt_keys=frozenset()):
         kt_no = _kt_mobile_near_bundle(text)
         if kt_no:
             reasons.append(f"KT 휴대폰 번호 명시({kt_no})")
+        if MVNO.search(auth) or MVNO.search(text):
+            reasons.append('KT망 알뜰폰 — 우리가 묶어줘야 함')
 
     # ── 유형2: 유선전화 결합 ─────────────────────────────────────────
-    if LANDLINE_KW.search(raw) and LANDLINE_NO.search(raw):
-        nums = LANDLINE_NO.findall(raw)[:2]
-        reasons.append(f"기존 유선전화 번호 표기({', '.join(nums)})")
-        btype = btype or '유선전화결합'
-    if FEE_DIFF.search(raw):
-        reasons.append('결합 전/후 요금 차이 기재')
-        btype = btype or '유선전화결합'
+    #    '전통신사 : LGU+ 070-...' 처럼 해지 대상 회선이 적힌 줄은 제외한다
+    landline = _landline_evidence(raw)
+    if landline:
+        reasons.extend(landline)
+        btype = '유무선+유선전화결합' if btype == '유무선결합' else '유선전화결합'
 
-    # ── 나머지 결합 필드값 (분류 안 된 것) ────────────────────────────
+    # ── 분류 안 된 결합 필드값 ──────────────────────────────────────
     leftover = [v for v in field_vals
                 if not any(k.replace(' ', '') in v.replace(' ', '') for k in WIRELESS_BUNDLE)]
     if leftover and not btype:
-        return _r('확인필요', None,
-                  [f"결합 필드 '{v}'" for v in leftover],
-                  None, mvno=bool(MVNO.search(auth + raw)))
+        return _r('확인필요', None, [f"결합 필드 '{v}'" for v in leftover], None, standalone)
 
     if not reasons:
-        return _r('정상단독', None, [], None)
+        return _r('해당없음', None, [], None, standalone)
 
-    # ── 알뜰폰이면 확신도를 낮춤 ─────────────────────────────────────
-    if btype == '유무선결합' and MVNO.search(auth):
-        if not KT_MOBILE.search(text):
-            return _r('확인필요', btype, reasons + [f'인증통신사 알뜰({auth})'], None, mvno=True)
+    # ── 향후 가입 후 결합 예정 → 지금은 대상 아님 ──────────────────────
+    #    단, 결합상품이 명시됐거나 기존 KT 번호가 적혀 있으면 진짜 요청으로 본다
+    if FUTURE.search(text) and not field_vals and not _kt_mobile_near_bundle(text):
+        return _r('해당없음', None, reasons,
+                  '향후 가입 후 결합 예정 — 현재 대상 아님', standalone)
 
-    return _r('결합대상', btype, reasons, None)
+    # ── 명의자 통신사가 KT가 아니면 확인필요 ────────────────────────────
+    #    (본인인증만 다른 폰으로 했을 수 있어 제외하지는 않는다)
+    if btype == '유무선결합' and not _kt_mobile_near_bundle(text):
+        if carrier_of_customer(row, text) == '타사':
+            return _r('확인필요', btype,
+                      reasons + [f'명의자 통신사가 KT 아님({auth or "미기재"}) — KT 회선 확인 필요'],
+                      None, standalone)
+
+    return _r('결합대상', btype, reasons, None, standalone)
+
+
+def _landline_evidence(raw):
+    """기존 유선전화(일반전화/인터넷전화) 결합 근거를 수집.
+
+    '전통신사 : LGU+ 070-8633-6695' 처럼 해지 대상 회선이 적힌 줄은 근거에서 뺀다.
+    """
+    explicit, listed = [], []
+    for line in raw.split('\n'):
+        if PREV_CARRIER_LINE.search(line):
+            continue
+        nums = LANDLINE_NO.findall(line)
+        if not nums:
+            continue
+        (explicit if '결합' in line else
+         listed if LANDLINE_KW.search(line) else []).extend(nums)
+    out = []
+    if explicit:
+        out.append(f"기존 유선전화 결합 요청({', '.join(dict.fromkeys(explicit))})")
+    if listed:
+        out.append(f"기존 유선전화 번호 표기({', '.join(dict.fromkeys(listed))})")
+    if out and FEE_DIFF.search(raw):
+        out.append('결합 전/후 요금 차이 기재')
+    return out
 
 
 def _kt_mobile_near_bundle(text):
@@ -182,6 +256,6 @@ def _kt_mobile_near_bundle(text):
     return m.group(0).strip() if m else None
 
 
-def _r(verdict, btype, reasons, excluded_by, mvno=False):
+def _r(verdict, btype, reasons, excluded_by, standalone=False):
     return {'verdict': verdict, 'type': btype, 'reasons': reasons,
-            'excluded_by': excluded_by, 'mvno': mvno}
+            'excluded_by': excluded_by, 'standalone': standalone}
