@@ -37,7 +37,7 @@
       R.digits(r['주민번호']).slice(0, 6), oss, norm,
       b.verdict === '해당없음' ? '' : b.verdict,
       b.reasons.join(' ; '),
-      r._giftNote ? '메모누락' : (r._gift || ''),
+      r._giftKind || r._gift || '',
 
       // ── 2차 검수 수식 (KT전산에서 KOS 데이터를 붙여넣으면 자동 계산) ──
       /* 원스톱해지 라인은 접수리스트가 아니라 원스톱 리스트로 대사한다 → OSS대사 시트 참고 */
@@ -151,7 +151,8 @@
       ['결합대상', stats.bundleTarget + '명  ← 전산 넘기기 전에 결합 처리 필요'],
       ['결합 확인필요', stats.bundleCheck + '명'],
       ['OSS 라인', stats.ossLines + '건  ← KOS 원스톱 수량과 맞아야 함'],
-      ['상품권 메모누락', stats.gift === null ? '(해피콜 목록 미업로드)' : stats.gift + '명'],
+      ['상품권 메모누락', stats.gift === null ? '(해피콜 목록 미업로드)' : stats.gift + '명  (비KT — ★상품권 메모 없음)'],
+      ['KT 상품권 미등록', stats.giftKt === null ? '(해피콜 목록 미업로드)' : stats.giftKt + '명  (KT — 바로 등록 가능한데 예정 상태)'],
       ['1차 오류', stats.webError + '건  (개통기한 / 상부점 / 판매점 / 상품매핑 / 가입번호)'], [],
       ['생성일시', stats.now],
       ['원본 파일', stats.fileName]

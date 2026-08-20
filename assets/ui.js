@@ -146,9 +146,15 @@
           ['개통상태', '개통상태'], ['사유', '_subNo', 'wrap']]
       },
       {
-        key: 'gift', label: '상품권 메모', rows: c.gift, tone: 't',
+        key: 'giftkt', label: 'KT 상품권 미등록', rows: c.giftKt, tone: 't',
         cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'],
-          ['고객이력', '_giftNote', 'wrap'],
+          ['인증', '고객인증(값)'], ['최근 상품권 이력', '_giftNote', 'wrap'],
+          ['가입 라인', '_giftLines', 'wrap']]
+      },
+      {
+        key: 'gift', label: '상품권 메모누락', rows: c.gift, tone: 't',
+        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'],
+          ['인증', '고객인증(값)'], ['최근 상품권 이력', '_giftNote', 'wrap'],
           ['이 고객의 가입 라인 — ★상품권 표기 없음', '_giftLines', 'wrap']]
       },
       {
@@ -163,7 +169,7 @@
   function render() {
     buildTabs();
     var c = S.checks;
-    var webErr = c.dueDate.length + c.sangbu.length + c.seller.length + c.product.length + c.subNo.length + c.gift.length;
+    var webErr = c.dueDate.length + c.sangbu.length + c.seller.length + c.product.length + c.subNo.length + c.gift.length + c.giftKt.length;
 
     $('#fileinfo').textContent = S.fileName + ' — 전체 ' + S.rows.length + '행';
     $('#cards').innerHTML = [
@@ -234,8 +240,8 @@
       keep: S.keep.length, drop: S.drop.length,
       bundleTarget: byCustomer(bundleRows(c.bundle, '결합대상')).length,
       bundleCheck: byCustomer(bundleRows(c.bundle, '확인필요')).length,
-      webError: c.dueDate.length + c.sangbu.length + c.seller.length + c.product.length + c.subNo.length + c.gift.length,
-      ossLines: c.ossList.length, gift: S.history ? c.gift.length : null, now: new Date().toLocaleString('ko-KR'), fileName: S.fileName
+      webError: c.dueDate.length + c.sangbu.length + c.seller.length + c.product.length + c.subNo.length + c.gift.length + c.giftKt.length,
+      ossLines: c.ossList.length, gift: S.history ? c.gift.length : null, giftKt: S.history ? c.giftKt.length : null, now: new Date().toLocaleString('ko-KR'), fileName: S.fileName
     });
     save(blob, 'KT검수_이관_' + stamp() + '.xlsx');
   });

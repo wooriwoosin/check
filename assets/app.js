@@ -38,7 +38,10 @@
 
   /* <br> 과 블록 태그를 줄바꿈으로 살린다 — '기타' 컬럼의 결합 필드 파싱에 필수 */
   function textOf(td) {
-    var html = td.innerHTML.replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|tr)>/gi, '\n');
+    var html = td.innerHTML
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(p|div|li|tr|h[1-6])>/gi, '\n')
+      .replace(/<(p|div|li|tr|h[1-6])\b[^>]*>/gi, '\n');
     var tmp = document.createElement('div');
     tmp.innerHTML = html;
     return (tmp.textContent || '').split('\n').map(function (l) { return l.trim(); })
@@ -57,7 +60,7 @@
 
   function runChecks(all, keep, historyByCust) {
     var mk = R.mobileKtCustomers(all);
-    var findings = { bundle: [], dueDate: [], sangbu: [], seller: [], ossList: [], product: [], subNo: [], gift: [] };
+    var findings = { bundle: [], dueDate: [], sangbu: [], seller: [], ossList: [], product: [], subNo: [], gift: [], giftKt: [] };
 
     // 접점코드 → 상부점 매핑을 데이터에서 학습 (다수결)
     var map = {};
@@ -140,32 +143,41 @@
       }
     });
 
-    /* 상품권 등록 메모 — 해피콜 파일(고객이력)이 있을 때만 검사한다.
+    /* 상품권 — 해피콜 파일(고객이력)이 있을 때만 검사한다.
 
-       메모는 보통 '인터넷' 라인의 가입.번호에 남기므로, 인터넷+TV 든 인터넷+전화 든
-       같은 고객의 어느 한 라인에만 있으면 통과다.
-       ★ 표기 여부는 이관 제외된 라인(모바일 등)까지 포함해 전체 행에서 확인한다. */
+       ① KT 고객(본인인증 통신사가 KT)      → 인증 없이 바로 등록 가능.
+                                            '등록예정' 으로 남아 있으면 등록 누락 의심.
+       ② 비KT 고객                          → 나중에 등록해야 하므로
+                                            가입.번호에 ★상품권 메모가 있어야 한다.
+
+       메모는 보통 '인터넷' 라인에 남기므로 고객당 한 곳만 있으면 통과다.
+       ★ 표기는 이관 제외된 라인(모바일 등)까지 포함해 전체 행에서 확인한다. */
     if (historyByCust) {
       var starByCust = {}, linesByCust = {}, giftByCust = {};
       all.forEach(function (r) {
-        var ck = R.customerKey(r);
-        if (R.hasGiftMemo(r)) starByCust[ck] = true;
+        if (R.hasGiftMemo(r)) starByCust[R.customerKey(r)] = true;
       });
       keep.forEach(function (r) {
         var ck = R.customerKey(r);
         (linesByCust[ck] = linesByCust[ck] || []).push(r);
         var g = R.giftStatus(historyByCust[ck]);
-        if (g && !(giftByCust[ck] && giftByCust[ck].g.state === '등록')) giftByCust[ck] = { r: r, g: g };
         r._gift = g ? g.state : '';
+        if (g && !giftByCust[ck]) giftByCust[ck] = { r: r, g: g };
       });
       Object.keys(giftByCust).forEach(function (ck) {
-        var e = giftByCust[ck];
-        if (e.g.state !== '예정' || starByCust[ck]) return;
-        e.r._giftNote = '고객이력 상품권 "' + (e.g.values.join(', ') || '(빈값)') + '"';
-        e.r._giftLines = (linesByCust[ck] || []).map(function (x) {
+        var e = giftByCust[ck], r = e.r;
+        if (e.g.state !== '예정') return;
+        r._giftNote = e.g.note + '  (' + e.g.ts + ')';
+        r._giftLines = (linesByCust[ck] || []).map(function (x) {
           return '· ' + (x['상품명'] || '').replace('KT_', '') + '  ' + (x['가입.번호'] || '(빈값)');
         }).join('\n');
-        findings.gift.push(e.r);
+        if (R.isKtAuth(r)) {
+          r._giftKind = 'KT미등록';
+          findings.giftKt.push(r);
+        } else if (!starByCust[ck]) {
+          r._giftKind = '메모누락';
+          findings.gift.push(r);
+        }
       });
     }
 

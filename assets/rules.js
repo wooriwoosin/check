@@ -220,31 +220,79 @@
     return null;
   }
 
-  // ══ W-10. 상품권 등록 메모 ═════════════════════════════════════════
-  /* 휴대폰이 KT 가 아니면 상품권 본인인증이 안 돼서 나중에 등록한다.
-     그때 가입.번호(H)에 '(★상품권,문자)' 같은 메모를 남기는데 가끔 빠뜨린다.
-     고객이력에 'ㅇ상품권: 등록예정' 인데 그 메모가 없는 고객을 찾는다.
+  // ══ W-10. 상품권 등록 ══════════════════════════════════════════════
+  /* 상품권은 두 가지를 본다.
+       ① 비KT 고객 — 본인인증이 필요해 나중에 등록한다.
+          그때 가입.번호(H)에 '(★상품권,문자)' 메모를 남기는데 가끔 빠뜨린다.
+       ② KT 고객 — 인증 없이 바로 등록할 수 있어 접수자가 등록하는 게 정석인데
+          '등록예정' 으로만 남아 있는 건이 있다.
+
+     고객이력은 최신이 위에 쌓이고, 등록을 마치면 'ㅇ상품권 : 등록예정' 아래가 아니라
+     그보다 나중 시각에 '모이3' '농지6' 같은 상품권 코드 메모를 따로 남긴다.
+     그래서 값이 아니라 **가장 최근 상품권 신호**로 판정한다.
      ※ 고객이력은 '해피콜 전체고객상품목록' 에만 있는 컬럼이다. */
-  var GIFT_LINE = /^[ㅇoO0*●■□·\-\s]*상품권\s*[:：]\s*(.*)$/;
+
+  // 이력 한 건: 작성자 / :유형:내용 (YYYY-MM-DD HH:MM)
+  var HIST_TS = /\((\d{4}-\d{2}-\d{2} \d{2}:\d{2})\)/g;
+  var GIFT_FIELD = /^[ㅇoO0*●■□·\-\s]*상품권\s*[:：]\s*(.*)$/m;
   var GIFT_PENDING = /^(예정|등록예정|일괄등록예정|추후등록|추후|미등록|대기)$/;
+  /* 상품권 코드 메모: 모이3 · 모농6 · 농지10 · 모롯마4 · 지류농협4 · 스카이 쿠폰4만원 …
+     '부재2' '해피콜부재2차' 같은 메모와 섞이지 않게 브랜드 글자로 시작하는 것만 본다. */
+  var GIFT_CODE = /^(문자\+)?[모이농지신롯로다스][가-힣\s]{0,5}\d{1,3}\s*(만원|만|원|장)?$/;
+  var GIFT_CODE_NOISE = /신청|부재|취소|진행|일정|실사|인증|발송|변경|완료|확인|요청|예정|반송|재접/;
   var GIFT_STAR = /상품권/;
 
-  /* 고객이력의 상품권 항목 상태. '등록' = 모이6·신세계1 처럼 실제 상품권명이 적힌 것. */
+  /* 한 건은 '작성자 :유형:내용 (일시)' 형태다.
+     작성자/유형 사이 개행은 원본 HTML 에 따라 살아 있기도 하고 아니기도 해서
+     개행이 아니라 ':유형:' 패턴으로 자른다. */
+  var HIST_HEAD = /^([\s\S]*?):([^:\n]{1,10}):([\s\S]*)$/;
+
+  function historyEntries(history) {
+    var text = String(history || ''), out = [], pos = 0, m;
+    HIST_TS.lastIndex = 0;
+    while ((m = HIST_TS.exec(text)) !== null) {
+      var chunk = text.slice(pos, m.index).trim();
+      pos = m.index + m[0].length;
+      if (!chunk) continue;
+      var h = HIST_HEAD.exec(chunk);
+      out.push({
+        ts: m[1],
+        author: h ? h[1].trim() : '',
+        kind: h ? h[2] : '',
+        content: (h ? h[3] : chunk).trim()
+      });
+    }
+    return out;
+  }
+
+  /* 가장 최근 상품권 신호. { state:'예정'|'등록', ts, note } 또는 null */
   function giftStatus(history) {
-    var vals = [];
-    String(history || '').split('\n').forEach(function (line) {
-      var m = GIFT_LINE.exec(line.trim());
-      if (!m) return;
-      var v = m[1].replace(/\(\d{4}-\d{2}-\d{2}.*$/, '').trim();
-      if (/^[ㅇoO]?기타\s*[:：]/.test(v)) v = '';     // 값이 비고 다음 항목이 붙은 경우
-      vals.push(v);
+    var latest = null;
+    historyEntries(history).forEach(function (e) {
+      var sig = null;
+      var f = GIFT_FIELD.exec(e.content);
+      if (f) {
+        var v = f[1].trim();
+        sig = { state: (!v || GIFT_PENDING.test(v.replace(/\s/g, ''))) ? '예정' : '등록',
+                note: '상품권: ' + (v || '(빈값)') };
+      } else if (GIFT_CODE.test(e.content) && !GIFT_CODE_NOISE.test(e.content)) {
+        sig = { state: '등록', note: '상품권 등록 메모 "' + e.content + '"' };
+      }
+      if (sig && (!latest || e.ts > latest.ts)) { sig.ts = e.ts; latest = sig; }
     });
-    if (!vals.length) return null;
-    var done = vals.filter(function (v) { return v && !GIFT_PENDING.test(v.replace(/\s/g, '')); });
-    return { state: done.length ? '등록' : '예정', values: vals };
+    return latest;
   }
 
   function hasGiftMemo(row) { return GIFT_STAR.test(row['가입.번호'] || ''); }
+
+  /* 본인인증에 쓴 휴대폰이 KT 인가 (알뜰폰 포함). KT 면 인증 없이 바로 등록 가능.
+     ※ 'SKT' 안에 'KT' 가 들어있으므로 타사를 먼저 걸러야 한다. */
+  function isKtAuth(row) {
+    var v = String(row['고객인증(값)'] || '');
+    if (!v) return false;
+    if (/SK|엘지|LG|U\+/i.test(v)) return false;
+    return /KT/i.test(v);
+  }
 
   function mobileKtCustomers(rows) {
     var set = {};
@@ -335,6 +383,7 @@
     phoneHead: phoneHead, digits: digits, normalizeProduct: normalizeProduct,
     mobileKtCustomers: mobileKtCustomers, judgeBundle: judgeBundle,
     nameTags: nameTags, attrTokens: attrTokens, dongpanTag: dongpanTag,
-    giftStatus: giftStatus, hasGiftMemo: hasGiftMemo
+    giftStatus: giftStatus, hasGiftMemo: hasGiftMemo, historyEntries: historyEntries,
+    isKtAuth: isKtAuth
   };
 })(window);
