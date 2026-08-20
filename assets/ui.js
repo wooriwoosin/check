@@ -71,6 +71,7 @@
         cols: [['행', function (g) { return g.head._r; }], ['고객명', function (g) { return g.head['고객명']; }],
           ['셋트유형', function (g) { return g.head['셋트유형']; }],
           ['유형', function (g) { return g.head._bundle.type || '-'; }],
+          ['속성', function (g) { return R.attrTokens(g.head).join(' / '); }],
           ['가입 라인', lineSummary, 'wrap'],
           ['근거', function (g) { return g.head._bundle.reasons.join('\n'); }, 'wrap']]
       },
@@ -104,11 +105,6 @@
           ['비고', '_ossNote', 'wrap']]
       },
       {
-        key: 'oss', label: 'OSS 태그 정합', rows: c.oss, tone: 'c',
-        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['상품옵션', '상품옵션'],
-          ['개통상태', '개통상태'], ['사유', '_oss', 'wrap']]
-      },
-      {
         key: 'pd', label: '상품 매핑', rows: c.product, tone: 't',
         cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['상품명', '상품명'],
           ['상품옵션', '상품옵션'], ['사유', '_product', 'wrap']]
@@ -130,7 +126,7 @@
   function render() {
     buildTabs();
     var c = S.checks;
-    var webErr = c.dueDate.length + c.sangbu.length + c.seller.length + c.product.length + c.subNo.length + c.oss.length;
+    var webErr = c.dueDate.length + c.sangbu.length + c.seller.length + c.product.length + c.subNo.length;
 
     $('#fileinfo').textContent = S.fileName + ' — 전체 ' + S.rows.length + '행';
     $('#cards').innerHTML = [
@@ -201,7 +197,7 @@
       keep: S.keep.length, drop: S.drop.length,
       bundleTarget: byCustomer(bundleRows(c.bundle, '결합대상')).length,
       bundleCheck: byCustomer(bundleRows(c.bundle, '확인필요')).length,
-      webError: c.dueDate.length + c.sangbu.length + c.seller.length + c.product.length + c.subNo.length + c.oss.length,
+      webError: c.dueDate.length + c.sangbu.length + c.seller.length + c.product.length + c.subNo.length,
       ossLines: c.ossList.length, now: new Date().toLocaleString('ko-KR'), fileName: S.fileName
     });
     save(blob, 'KT검수_이관_' + stamp() + '.xlsx');

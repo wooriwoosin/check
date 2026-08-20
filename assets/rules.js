@@ -5,7 +5,7 @@
 
   // ══ W-0. KT전산 이관 필터 ═══════════════════════════════════════════
   var INCLUDE_PRODUCTS = ['KT_인터넷', 'KT_TV', 'KT_부가상품',
-    '유선기타_(KT-biz)인터넷', 'KT_인터넷전화', 'KT_일반전화'];
+    '유선기타_(KT-biz)인터넷', '유선기타_(KT-biz)TV', 'KT_인터넷전화', 'KT_일반전화'];
   var EXCLUDE_SANGBU = ['5.유KT-대성_평택(월☆통20)', '5.유KT-대성_경기서부지사(월☆통20)'];
 
   function transferReason(row) {
@@ -46,12 +46,23 @@
 
   /* KOS 접수 AK열은 수식으로 '지니'·'인터넷'·공백을 지워 비교한다.
      예) '지니 TV 베이직' → 'TV베이직' / '인터넷 패밀리 슬림' → '패밀리슬림' */
-  function normalizeProduct(opt) {
+  /* KT_부가상품은 KOS 에서 상품명(AK)이 아니라 상품군(AJ)으로 잡힌다.
+     여기에 없는 부가상품은 빈값을 돌려 1차 '상품 매핑' 탭에 뜨게 한다. */
+  var ADDON_MAP = [
+    ['원스톱해지', '원스톱해지'],
+    ['복수AP', '복수AP']        // KOS 상품구분=홈IoT, 상품군=복수AP
+  ];
+
+  function normalizeProduct(opt, productName) {
     var s = String(opt || '').trim()
       .replace(/^\((추단|하브|협력|자체|소호|일반|안심\/일반|안심)\)/, '')
       .replace(/\s/g, '');
     if (!s) return '';
-    if (s.indexOf('원스톱해지') >= 0) return '원스톱해지';
+    for (var a = 0; a < ADDON_MAP.length; a++) {
+      if (s.indexOf(ADDON_MAP[a][0]) >= 0) return ADDON_MAP[a][1];
+    }
+    // 부가상품인데 위 목록에 없으면 매핑 미정 → 속도만 보고 인터넷 상품으로 오인하지 않는다
+    if (String(productName || '').indexOf('부가상품') >= 0) return '';
     if (s.indexOf('일반전화') >= 0) return '일반전화';
     if (s.indexOf('인터넷전화') >= 0) return '인터넷전화';
     if (s.indexOf('TV') >= 0 || /^T[가-힣]/.test(s)) {
@@ -78,6 +89,9 @@
   var NEG_VALUE = /^(x|X|없음|미신청|불가|해당없음|무|-)\s*$/;
   var SELF_SERVE = ['고객별도진행', '고객별도 진행', '고객센터안내', '고객센터 문의', '본인진행', '고객직접'];
   var FAMILY = ['패밀리', '팸'];
+  /* 동판(유선+무선 동시판매)은 보통 유선 개통 후 무선을 진행하고 그다음 결합한다.
+     "지금 쓰고 있는 KT 회선을 묶어달라" 와는 별개 건이라 결합 검수에서 뺀다. */
+  var DONGPAN = /동판/;
   var OTHER_CARRIER_BUNDLE = ['요즘가족결합', '요가결', '참쉬운가족결합', '가족무한사랑', '투게더'];
   var WIRELESS_BUNDLE = ['프리미엄싱글', '프리미엄 싱글', '프싱',
     '프리미엄가족결합', '프리미엄가족', '프가결',
@@ -111,6 +125,21 @@
 
   function nameTags(row) {
     return String(row['고객명'] || '').split('/').slice(1).map(function (t) { return t.trim(); });
+  }
+
+  /* 속성은 고객명 뒤 '/' 태그와 기타(BA)의 '속성:' 필드 두 군데에 적힌다. */
+  function attrTokens(row) {
+    var out = nameTags(row);
+    var m = /속성\s*[:：]\s*([^\n■□ㅁ●★]{0,30})/.exec(String(row['기타'] || ''));
+    if (m) {
+      m[1].split(/[\/,\s]+/).forEach(function (t) { if (t.trim()) out.push(t.trim()); });
+    }
+    return out.filter(function (t, i) { return t && out.indexOf(t) === i; });
+  }
+
+  function dongpanTag(row) {
+    var hit = attrTokens(row).filter(function (t) { return DONGPAN.test(t); });
+    return hit.length ? hit[0] : null;
   }
 
   function fieldValues(text) {
@@ -186,6 +215,8 @@
 
     if (mobileKtKeys[customerKey(row)]) return skip('모바일_KT 동시가입(별도 검수)');
     if (has(opt, FAMILY)) return skip('패밀리 상품(' + opt + ') — 유선+유선결합');
+    var dp = dongpanTag(row);
+    if (dp) return skip('동판 건(속성 "' + dp + '") — 유선 개통 후 무선·결합 진행');
 
     var text = stripNoise(raw);
     var neg = has(text, NEG_PHRASE);
@@ -256,6 +287,7 @@
     INCLUDE_PRODUCTS: INCLUDE_PRODUCTS, EXCLUDE_SANGBU: EXCLUDE_SANGBU,
     transferReason: transferReason, customerKey: customerKey, serviceNo: serviceNo,
     phoneHead: phoneHead, digits: digits, normalizeProduct: normalizeProduct,
-    mobileKtCustomers: mobileKtCustomers, judgeBundle: judgeBundle, nameTags: nameTags
+    mobileKtCustomers: mobileKtCustomers, judgeBundle: judgeBundle,
+    nameTags: nameTags, attrTokens: attrTokens, dongpanTag: dongpanTag
   };
 })(window);

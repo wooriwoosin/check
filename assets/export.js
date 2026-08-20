@@ -23,7 +23,7 @@
 
   function webRow(r, n) {
     var svc = r._svc || R.serviceNo(r['가입.번호']);
-    var norm = r._norm || R.normalizeProduct(r['상품옵션']);
+    var norm = r._norm || R.normalizeProduct(r['상품옵션'], r['상품명']);
     var oss = norm === '원스톱해지' && svc.length >= 8 ? svc.slice(0, 4) + svc.slice(-4) : '';
     var b = r._bundle || { verdict: '해당없음', reasons: [] };
     var f = function (s) { return { f: s.replace(/#/g, n) }; };
@@ -52,7 +52,11 @@
 
       f('=IFERROR(INDEX(접수!$I:$I,MATCH($' + C['키8'] + '#&"|"&$' + C['상품정규화'] + '#,접수!$AY:$AY,0)),"")'),
 
-      f('=IF($' + C['생년월일6'] + '#="","",IF(COUNTIF(결합!$U:$U,$' + C['생년월일6'] + '#)>0,"O","결합X"))'),
+      /* 단독은 원래 결합이 없는 게 정상이라 1차에서 '결합대상' 으로 잡힌 건만 대조한다.
+         DPS 는 전산에서 결합을 확인해야 하므로 전부 대조한다. */
+      f('=IF($' + C['생년월일6'] + '#="","",' +
+        'IF(AND(LEFT($' + C['셋트유형'] + '#,2)="단독",$' + C['1차판정'] + '#<>"결합대상"),"해당없음",' +
+        'IF(COUNTIF(결합!$U:$U,$' + C['생년월일6'] + '#)>0,"O","결합X")))'),
 
       f('=IF($' + C['원스톱키'] + '#="","",IFERROR(INDEX(원스톱!$I:$I,MATCH($' + C['원스톱키'] + '#,원스톱!$Q:$Q,0)),"원스톱없음"))'),
 
@@ -134,6 +138,7 @@
       ['', '  · "원스톱" 시트 R열이 "웹없음" 이면 KOS 에만 있는 건입니다.'], [],
       ['주의', '각 시트 오른쪽 끝의 보조열(회색 머리글)은 지우지 마세요. 매칭 키를 만드는 수식입니다.'],
       ['', '  · 접수  AV=키8, AW=전화앞5, AX=상품정규화, AY=복합키, AZ=웹 매칭여부'],
+      ['', '    (AX 는 부가상품이면 상품군(AJ), 그 외는 상품명(AK) 기준)'],
       ['', '  · 결합  U=생년월일6'],
       ['', '  · 원스톱 Q=서비스번호키(앞4+뒤4), R=웹 매칭여부'], [],
       ['참고', '붙여넣기 여유 행은 ' + PASTE_ROWS + '행입니다. 더 많으면 보조열 수식을 아래로 끌어 채우세요.'], [],
@@ -163,7 +168,12 @@
       kosSheet('접수', [
         { col: 48, title: '키8', formula: '=IF($X#="","",IFERROR(MID($X#,FIND("!",$X#)+1,8),LEFT($X#,8)))' },
         { col: 49, title: '전화앞5', formula: '=IF($AF#="","",LEFT(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE($AF#,"-","")," ",""),"*",""),5))' },
-        { col: 50, title: '상품정규화', formula: '=IF($AK#="","",SUBSTITUTE(SUBSTITUTE(SUBSTITUTE($AK#,"지니",""),"인터넷","")," ",""))' },
+        {
+          col: 50, title: '상품정규화',
+          // 부가상품은 상품명(AK)이 아니라 상품군(AJ)으로 잡힌다 (예: 홈IoT / 복수AP)
+          formula: '=IF($AK#="","",IF(TRIM($AJ#)="복수AP","복수AP",' +
+            'SUBSTITUTE(SUBSTITUTE(SUBSTITUTE($AK#,"지니",""),"인터넷","")," ","")))'
+        },
         { col: 51, title: '복합키', formula: '=IF($AV#="","",$AV#&"|"&$AX#)' },
         {
           col: 52, title: '웹 매칭여부',

@@ -57,7 +57,7 @@
 
   function runChecks(all, keep) {
     var mk = R.mobileKtCustomers(all);
-    var findings = { bundle: [], dueDate: [], sangbu: [], seller: [], oss: [], ossList: [], product: [], subNo: [] };
+    var findings = { bundle: [], dueDate: [], sangbu: [], seller: [], ossList: [], product: [], subNo: [] };
 
     // 접점코드 → 상부점 매핑을 데이터에서 학습 (다수결)
     var map = {};
@@ -70,16 +70,10 @@
       major[k] = Object.keys(map[k]).sort(function (a, b) { return map[k][b] - map[k][a]; })[0];
     });
 
-    // OSS: 고객명 태그 ↔ 원스톱해지 라인
-    var tagged = {}, hasLine = {};
-    keep.forEach(function (r) {
-      if (R.nameTags(r).some(function (t) { return t.toUpperCase() === 'OSS'; })) tagged[R.customerKey(r)] = r;
-      if (R.normalizeProduct(r['상품옵션']) === '원스톱해지') hasLine[R.customerKey(r)] = r;
-    });
     /* OSS(원스톱전환)는 신규 검수 항목.
        웹의 원스톱해지 라인과 KOS 원스톱 로우데이터의 수량이 맞아야 한다. */
     keep.forEach(function (r) {
-      if (R.normalizeProduct(r['상품옵션']) !== '원스톱해지') return;
+      if (R.normalizeProduct(r['상품옵션'], r['상품명']) !== '원스톱해지') return;
       var svc = R.serviceNo(r['가입.번호']);
       r._ossKey = svc.length >= 8 ? svc.slice(0, 4) + svc.slice(-4) : '';
       if (!r._ossKey) r._ossNote = '가입.번호에서 원스톱 키를 만들 수 없음';
@@ -131,7 +125,7 @@
         findings.seller.push(r);
       }
 
-      r._norm = R.normalizeProduct(r['상품옵션']);
+      r._norm = R.normalizeProduct(r['상품옵션'], r['상품명']);
       if (!r._norm) { r._product = '상품옵션을 KT 상품명으로 매핑할 수 없음'; findings.product.push(r); }
 
       r._svc = R.serviceNo(r['가입.번호']);
@@ -143,21 +137,6 @@
       } else if (r._svc.length !== 11) {
         r._subNo = '서비스번호가 ' + r._svc.length + '자리 (' + r._svc + ') — 11자리여야 함';
         findings.subNo.push(r);
-      }
-    });
-
-    Object.keys(tagged).forEach(function (ck) {
-      if (!hasLine[ck]) {
-        var r = tagged[ck];
-        r._oss = '고객명에 OSS 태그가 있는데 원스톱해지(OSS) 라인이 없음';
-        findings.oss.push(r);
-      }
-    });
-    Object.keys(hasLine).forEach(function (ck) {
-      if (!tagged[ck]) {
-        var r = hasLine[ck];
-        r._oss = '원스톱해지(OSS) 라인이 있는데 고객명에 OSS 태그가 없음';
-        findings.oss.push(r);
       }
     });
 
