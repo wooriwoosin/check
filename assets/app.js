@@ -2,7 +2,8 @@
 (function () {
   'use strict';
   var R = window.Rules, X = window.XlsxWriter, T = window.KosTemplates;
-  var STATE = { rows: [], keep: [], drop: [], checks: null, fileName: '', history: null };
+  var STATE = { rows: [], keep: [], drop: [], checks: null, fileName: '', history: null,
+              hasSangbu: true, historyOnly: false };
   var $ = function (s) { return document.querySelector(s); };
 
   // ══ 웹 로우데이터 파싱 ══════════════════════════════════════════════
@@ -60,18 +61,9 @@
 
   function runChecks(all, keep, historyByCust) {
     var mk = R.mobileKtCustomers(all);
+    // 해피콜 목록에는 접점코드가 없다 → 상부점 검수는 건너뛴다
+    var hasSangbu = keep.length > 0 && keep[0]['접점코드'] !== undefined;
     var findings = { bundle: [], dueDate: [], sangbu: [], seller: [], ossList: [], product: [], subNo: [], gift: [], giftKt: [] };
-
-    // 접점코드 → 상부점 매핑을 데이터에서 학습 (다수결)
-    var map = {};
-    keep.forEach(function (r) {
-      var k = r['접점코드'] || '(미기재)';
-      (map[k] = map[k] || {})[r['상부점']] = (map[k][r['상부점']] || 0) + 1;
-    });
-    var major = {};
-    Object.keys(map).forEach(function (k) {
-      major[k] = Object.keys(map[k]).sort(function (a, b) { return map[k][b] - map[k][a]; })[0];
-    });
 
     /* OSS(원스톱전환)는 신규 검수 항목.
        웹의 원스톱해지 라인과 KOS 원스톱 로우데이터의 수량이 맞아야 한다. */
@@ -98,18 +90,30 @@
         }
       }
 
-      var k = r['접점코드'] || '(미기재)';
-      var sb = r['상부점'] || '';
-      /* 상부점이 온라인이면 접점도 온라인이어야 한다 (양방향).
-         도매 하위 접점은 여러 개라 1차에서 못 가리므로 2차에서 KOS 접점명과 대조한다. */
-      if (/온라인/.test(sb) !== /온라인/.test(k)) {
-        r._sangbu = /온라인/.test(sb)
-          ? '상부점이 온라인인데 접점코드가 "' + k + '"'
-          : '접점코드가 온라인인데 상부점이 "' + (sb || '(빈값)') + '"';
-        findings.sangbu.push(r);
-      } else if (major[k] && sb !== major[k]) {
-        r._sangbu = '접점코드 ' + k + ' 의 통상 상부점은 "' + major[k] + '"';
-        findings.sangbu.push(r);
+      /* 상부점 검수 — 접점코드가 있는 파일에서만.
+
+         업체 접점(엠제이통신·다성통신 등)은 각자 상부점이 달라서
+         '접점코드별 통상 상부점' 을 데이터에서 학습하면 오탐이 난다.
+         (예: 접점코드가 (KT)도매 인데 상부점이 유선기타인 정상 건)
+         그래서 확실한 대응만 본다. */
+      if (hasSangbu) {
+        var k = r['접점코드'] || '';
+        var sb = r['상부점'] || '';
+        var etcProduct = /^유선기타/.test(r['상품명'] || '');
+        var etcSangbu = /유선기타/.test(sb);
+        if (/온라인/.test(sb) !== /온라인/.test(k)) {
+          r._sangbu = /온라인/.test(sb)
+            ? '상부점이 온라인인데 접점코드가 "' + (k || '(빈값)') + '"'
+            : '접점코드가 온라인인데 상부점이 "' + (sb || '(빈값)') + '"';
+        } else if (etcProduct !== etcSangbu) {
+          r._sangbu = etcProduct
+            ? '상품명이 유선기타인데 상부점이 "' + (sb || '(빈값)') + '" — 유선기타여야 함'
+            : '상부점이 유선기타인데 상품명이 "' + (r['상품명'] || '') + '"';
+        } else if (!etcProduct && k === '(KT)도매' && !/도매/.test(sb)) {
+          // 유선기타는 (KT)도매 접점이라도 상부점이 유선기타인 게 정상이라 위에서 이미 통과시킨다
+          r._sangbu = '접점코드가 (KT)도매(우리 직영)인데 상부점이 "' + (sb || '(빈값)') + '"';
+        }
+        if (r._sangbu) findings.sangbu.push(r);
       }
 
       /* 협력점명 마커 → 접수경로
@@ -198,8 +202,12 @@
     if (parsed.header.indexOf('고객이력') < 0) {
       throw new Error('이 파일에는 "고객이력" 열이 없습니다. 해피콜 전체고객상품목록이 맞는지 확인해주세요.');
     }
+    return historyFromRows(parsed.rows);
+  }
+
+  function historyFromRows(rows) {
     var map = {}, filled = 0;
-    parsed.rows.forEach(function (r) {
+    rows.forEach(function (r) {
       var h = (r['고객이력'] || '').trim();
       if (!h) return;
       var ck = R.customerKey(r);
@@ -207,9 +215,9 @@
       else if (map[ck].indexOf(h) < 0) map[ck] += '\n' + h;   // 라인별로 다르면 합친다
       filled++;
     });
-    return { map: map, rows: parsed.rows.length, filled: filled, customers: Object.keys(map).length };
+    return { map: map, rows: rows.length, filled: filled, customers: Object.keys(map).length };
   }
 
-  window.KtCheck = { parseWebRaw: parseWebRaw, parseHistory: parseHistory, runChecks: runChecks, STATE: STATE, $: $,
+  window.KtCheck = { parseWebRaw: parseWebRaw, parseHistory: parseHistory, historyFromRows: historyFromRows, runChecks: runChecks, STATE: STATE, $: $,
                      parseDate: parseDate, ymd: ymd };
 })();

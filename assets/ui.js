@@ -57,6 +57,11 @@
         var parsed = K.parseWebRaw(fr.result);
         S.rows = parsed.rows;
         S.fileName = f.name;
+        S.hasSangbu = parsed.header.indexOf('접점코드') >= 0;
+        /* 해피콜 목록을 그냥 올린 경우에도 되는 검수는 돌려준다.
+           접점코드·사업자번호가 없어서 상부점 검수와 이관 파일 생성만 빠진다. */
+        S.historyOnly = !S.hasSangbu && parsed.header.indexOf('고객이력') >= 0;
+        if (S.historyOnly) S.history = K.historyFromRows(parsed.rows).map;
         S.keep = []; S.drop = [];
         S.rows.forEach(function (r) {
           var why = R.transferReason(r);
@@ -124,11 +129,11 @@
         cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['생년월일', birth], ['접수일', '접수일'],
           ['개통기한', '개통기한'], ['사유', '_dueDate', 'wrap']]
       },
-      {
+      S.hasSangbu ? {
         key: 'sb', label: '상부점', rows: c.sangbu, tone: 'c',
         cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['생년월일', birth], ['접점코드', '접점코드'],
           ['상부점', '상부점'], ['사유', '_sangbu', 'wrap']]
-      },
+      } : null,
       {
         key: 'sl', label: '판매점 접수경로', rows: c.seller, tone: 'c',
         cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['생년월일', birth], ['협력점', '협력점'],
@@ -169,7 +174,7 @@
           ['상품명', function (d) { return d.row['상품명']; }], ['상품옵션', function (d) { return d.row['상품옵션']; }],
           ['사유', function (d) { return d.reason; }, 'wrap']]
       }
-    ];
+    ].filter(Boolean);
   }
 
   function render() {
@@ -177,7 +182,18 @@
     var c = S.checks;
     var webErr = c.dueDate.length + c.sangbu.length + c.seller.length + c.product.length + c.subNo.length + c.gift.length + c.giftKt.length;
 
-    $('#fileinfo').textContent = S.fileName + ' — 전체 ' + S.rows.length + '행';
+    $('#fileinfo').textContent = S.fileName + ' — 전체 ' + S.rows.length + '행' +
+      (S.historyOnly ? '  (해피콜 목록)' : '');
+    var warn = $('#modewarn');
+    if (S.historyOnly) {
+      warn.innerHTML = '<b>해피콜 목록만 올리셨습니다.</b> 고객이력이 있어서 <b>상품권 검수는 됩니다.</b><br>' +
+        '다만 이 파일에는 <code>접점코드</code>·<code>사업자번호</code> 가 없어서 ' +
+        '<b>상부점 검수와 KT전산 이관 파일 생성은 안 됩니다.</b><br>' +
+        '두 가지가 필요하면 <code>전체고객상품</code> 을 올려주세요.';
+      warn.classList.remove('hidden');
+    } else warn.classList.add('hidden');
+    $('#dl').disabled = S.historyOnly;
+    $('#dlx').disabled = S.historyOnly;
     $('#cards').innerHTML = [
       card(S.rows.length, '전체 행', ''),
       card(S.keep.length, 'KT전산 이관 대상', 'ok'),
