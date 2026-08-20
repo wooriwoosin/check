@@ -6,13 +6,29 @@
   // ══ W-0. KT전산 이관 필터 ═══════════════════════════════════════════
   var INCLUDE_PRODUCTS = ['KT_인터넷', 'KT_TV', 'KT_부가상품',
     '유선기타_(KT-biz)인터넷', '유선기타_(KT-biz)TV', 'KT_인터넷전화', 'KT_일반전화'];
-  var EXCLUDE_SANGBU = ['5.유KT-대성_평택(월☆통20)', '5.유KT-대성_경기서부지사(월☆통20)'];
+  /* 이관에서 빼는 상부점·접점.
+     대성은 지점이 계속 늘어나(평택·수원·경기서부지사·무선 등) 정확한 값 목록으로는
+     새 지점이 생길 때마다 놓친다. 그래서 이름 패턴으로 잡는다. */
+  var EXCLUDE_PATTERNS = [
+    { re: /대성/, label: '대성 상권사업부' }
+  ];
+
+  function excludeMatch(row) {
+    var sangbu = (row['상부점'] || '').trim();
+    var jeomjeom = (row['접점코드'] || '').trim();
+    for (var i = 0; i < EXCLUDE_PATTERNS.length; i++) {
+      var p = EXCLUDE_PATTERNS[i];
+      if (p.re.test(sangbu)) return { label: p.label, where: '상부점', value: sangbu };
+      if (p.re.test(jeomjeom)) return { label: p.label, where: '접점코드', value: jeomjeom };
+    }
+    return null;
+  }
 
   function transferReason(row) {
     var p = (row['상품명'] || '').trim();
     if (INCLUDE_PRODUCTS.indexOf(p) < 0) return '이관 대상 상품명 아님(' + (p || '미기재') + ')';
-    var s = (row['상부점'] || '').trim();
-    if (EXCLUDE_SANGBU.indexOf(s) >= 0) return '제외 상부점(' + s + ')';
+    var ex = excludeMatch(row);
+    if (ex) return '제외 대상 ' + ex.label + ' — ' + ex.where + '="' + ex.value + '"';
     return null;
   }
 
@@ -284,7 +300,7 @@
   }
 
   global.Rules = {
-    INCLUDE_PRODUCTS: INCLUDE_PRODUCTS, EXCLUDE_SANGBU: EXCLUDE_SANGBU,
+    INCLUDE_PRODUCTS: INCLUDE_PRODUCTS, EXCLUDE_PATTERNS: EXCLUDE_PATTERNS,
     transferReason: transferReason, customerKey: customerKey, serviceNo: serviceNo,
     phoneHead: phoneHead, digits: digits, normalizeProduct: normalizeProduct,
     mobileKtCustomers: mobileKtCustomers, judgeBundle: judgeBundle,

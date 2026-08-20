@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 """
+import re
+
 웹 로우데이터 → KT전산 이관 대상 필터 (1차 웹 검수 W-0)
 
 웹 로우데이터에는 전 통신사 건이 다 들어있다(979건 중 KT는 408건).
@@ -12,14 +14,15 @@ INCLUDE_PRODUCTS = (
     'KT_TV',
     'KT_부가상품',
     '유선기타_(KT-biz)인터넷',
+    '유선기타_(KT-biz)TV',
     'KT_인터넷전화',
     'KT_일반전화',
 )
 
-# 이관에서 빼는 상부점 (대성 상권사업부 — 우리 접수 건이 아님)
-EXCLUDE_SANGBU = (
-    '5.유KT-대성_평택(월☆통20)',
-    '5.유KT-대성_경기서부지사(월☆통20)',
+# 이관에서 빼는 상부점·접점 (대성 상권사업부 — 우리 접수 건이 아님)
+# 지점이 계속 늘어나므로(평택·수원·경기서부지사·무선 등) 이름 패턴으로 잡는다.
+EXCLUDE_PATTERNS = (
+    (re.compile(r'대성'), '대성 상권사업부'),
 )
 
 
@@ -28,9 +31,11 @@ def transfer_reason(row):
     product = str(row.get('상품명') or '').strip()
     if product not in INCLUDE_PRODUCTS:
         return f'이관 대상 상품명 아님({product or "미기재"})'
-    sangbu = str(row.get('상부점') or '').strip()
-    if sangbu in EXCLUDE_SANGBU:
-        return f'제외 상부점({sangbu})'
+    for pat, label in EXCLUDE_PATTERNS:
+        for col in ('상부점', '접점코드'):
+            value = str(row.get(col) or '').strip()
+            if pat.search(value):
+                return f'제외 대상 {label} — {col}="{value}"'
     return None
 
 
