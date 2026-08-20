@@ -296,12 +296,15 @@
   var ACTIVE_STATUS = ['접수완료', '실적확인중', '개통완료'];
   function isActive(row) { return ACTIVE_STATUS.indexOf((row['개통상태'] || '').trim()) >= 0; }
 
-  /* 본인인증에 쓴 휴대폰이 KT 인가 (알뜰폰 포함). KT 면 인증 없이 바로 등록 가능.
+  /* 본인인증에 쓴 휴대폰이 KT 직영인가.
+     KT 직영이면 인증 없이 상품권을 바로 등록할 수 있다.
+     ※ KT망 알뜰폰(MVNO)은 인증이 필요하므로 타사와 같이 취급한다.
      ※ 'SKT' 안에 'KT' 가 들어있으므로 타사를 먼저 걸러야 한다. */
   function isKtAuth(row) {
     var v = String(row['고객인증(값)'] || '');
     if (!v) return false;
     if (/SK|엘지|LG|U\+/i.test(v)) return false;
+    if (MVNO.test(v)) return false;          // KT알뜰 · KT알뜰폰 → 인증 필요
     return /KT/i.test(v);
   }
 
