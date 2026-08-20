@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var R = window.Rules, X = window.XlsxWriter, T = window.KosTemplates;
-  var STATE = { rows: [], keep: [], drop: [], checks: null, fileName: '' };
+  var STATE = { rows: [], keep: [], drop: [], checks: null, fileName: '', history: null };
   var $ = function (s) { return document.querySelector(s); };
 
   // ══ 웹 로우데이터 파싱 ══════════════════════════════════════════════
@@ -55,9 +55,9 @@
     return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
   }
 
-  function runChecks(all, keep) {
+  function runChecks(all, keep, historyByCust) {
     var mk = R.mobileKtCustomers(all);
-    var findings = { bundle: [], dueDate: [], sangbu: [], seller: [], ossList: [], product: [], subNo: [] };
+    var findings = { bundle: [], dueDate: [], sangbu: [], seller: [], ossList: [], product: [], subNo: [], gift: [] };
 
     // 접점코드 → 상부점 매핑을 데이터에서 학습 (다수결)
     var map = {};
@@ -140,9 +140,52 @@
       }
     });
 
+    /* 상품권 등록 메모 — 해피콜 파일(고객이력)이 있을 때만 검사한다.
+       메모는 라인이 아니라 고객 단위로 남기므로, 같은 고객의 어느 라인에든 있으면 통과. */
+    if (historyByCust) {
+      var starByCust = {}, giftByCust = {};
+      keep.forEach(function (r) {
+        var ck = R.customerKey(r);
+        if (R.hasGiftMemo(r)) starByCust[ck] = true;
+        var g = R.giftStatus(historyByCust[ck]);
+        if (g && !(giftByCust[ck] && giftByCust[ck].g.state === '등록')) giftByCust[ck] = { r: r, g: g };
+        r._gift = g ? g.state : '';
+      });
+      Object.keys(giftByCust).forEach(function (ck) {
+        var e = giftByCust[ck];
+        if (e.g.state === '예정' && !starByCust[ck]) {
+          e.r._giftNote = '고객이력 상품권 "' + (e.g.values.join(', ') || '(빈값)') +
+            '" 인데 가입.번호에 ★상품권 메모가 없음';
+          findings.gift.push(e.r);
+        }
+      });
+    }
+
     return findings;
   }
 
-  window.KtCheck = { parseWebRaw: parseWebRaw, runChecks: runChecks, STATE: STATE, $: $,
+  /* 해피콜 전체고객상품목록에서 고객이력만 뽑아 고객 단위로 모은다.
+     이 파일에는 접점코드·사업자번호가 없어서 기본 로우데이터를 대체하지 못한다.
+
+     ※ 'No' 열은 두 파일에서 정렬이 달라 조인 키로 쓸 수 없다(단순 행 번호).
+        고객이력은 어차피 고객 단위 기록이므로 주민번호 기반 고객키로 묶는다. */
+  function parseHistory(buffer) {
+    var parsed = parseWebRaw(buffer);
+    if (parsed.header.indexOf('고객이력') < 0) {
+      throw new Error('이 파일에는 "고객이력" 열이 없습니다. 해피콜 전체고객상품목록이 맞는지 확인해주세요.');
+    }
+    var map = {}, filled = 0;
+    parsed.rows.forEach(function (r) {
+      var h = (r['고객이력'] || '').trim();
+      if (!h) return;
+      var ck = R.customerKey(r);
+      if (map[ck] === undefined) map[ck] = h;
+      else if (map[ck].indexOf(h) < 0) map[ck] += '\n' + h;   // 라인별로 다르면 합친다
+      filled++;
+    });
+    return { map: map, rows: parsed.rows.length, filled: filled, customers: Object.keys(map).length };
+  }
+
+  window.KtCheck = { parseWebRaw: parseWebRaw, parseHistory: parseHistory, runChecks: runChecks, STATE: STATE, $: $,
                      parseDate: parseDate, ymd: ymd };
 })();

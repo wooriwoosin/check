@@ -220,6 +220,32 @@
     return null;
   }
 
+  // ══ W-10. 상품권 등록 메모 ═════════════════════════════════════════
+  /* 휴대폰이 KT 가 아니면 상품권 본인인증이 안 돼서 나중에 등록한다.
+     그때 가입.번호(H)에 '(★상품권,문자)' 같은 메모를 남기는데 가끔 빠뜨린다.
+     고객이력에 'ㅇ상품권: 등록예정' 인데 그 메모가 없는 고객을 찾는다.
+     ※ 고객이력은 '해피콜 전체고객상품목록' 에만 있는 컬럼이다. */
+  var GIFT_LINE = /^[ㅇoO0*●■□·\-\s]*상품권\s*[:：]\s*(.*)$/;
+  var GIFT_PENDING = /^(예정|등록예정|일괄등록예정|추후등록|추후|미등록|대기)$/;
+  var GIFT_STAR = /상품권/;
+
+  /* 고객이력의 상품권 항목 상태. '등록' = 모이6·신세계1 처럼 실제 상품권명이 적힌 것. */
+  function giftStatus(history) {
+    var vals = [];
+    String(history || '').split('\n').forEach(function (line) {
+      var m = GIFT_LINE.exec(line.trim());
+      if (!m) return;
+      var v = m[1].replace(/\(\d{4}-\d{2}-\d{2}.*$/, '').trim();
+      if (/^[ㅇoO]?기타\s*[:：]/.test(v)) v = '';     // 값이 비고 다음 항목이 붙은 경우
+      vals.push(v);
+    });
+    if (!vals.length) return null;
+    var done = vals.filter(function (v) { return v && !GIFT_PENDING.test(v.replace(/\s/g, '')); });
+    return { state: done.length ? '등록' : '예정', values: vals };
+  }
+
+  function hasGiftMemo(row) { return GIFT_STAR.test(row['가입.번호'] || ''); }
+
   function mobileKtCustomers(rows) {
     var set = {};
     rows.forEach(function (r) { if (r['상품명'] === '모바일_KT') set[customerKey(r)] = true; });
@@ -308,6 +334,7 @@
     transferReason: transferReason, customerKey: customerKey, serviceNo: serviceNo,
     phoneHead: phoneHead, digits: digits, normalizeProduct: normalizeProduct,
     mobileKtCustomers: mobileKtCustomers, judgeBundle: judgeBundle,
-    nameTags: nameTags, attrTokens: attrTokens, dongpanTag: dongpanTag
+    nameTags: nameTags, attrTokens: attrTokens, dongpanTag: dongpanTag,
+    giftStatus: giftStatus, hasGiftMemo: hasGiftMemo
   };
 })(window);

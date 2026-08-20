@@ -18,6 +18,37 @@
 
   function fail(msg) { err.textContent = msg; err.classList.remove('hidden'); }
 
+  // ── 해피콜 목록(고객이력) — 선택 업로드 ──────────────────────────
+  var drop2 = $('#drop2'), file2 = $('#file2'), err2 = $('#err2'), ok2 = $('#ok2');
+  drop2.addEventListener('click', function () { file2.click(); });
+  drop2.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') file2.click(); });
+  ['dragenter', 'dragover'].forEach(function (t) {
+    drop2.addEventListener(t, function (e) { e.preventDefault(); drop2.classList.add('over'); });
+  });
+  ['dragleave', 'drop'].forEach(function (t) {
+    drop2.addEventListener(t, function (e) { e.preventDefault(); drop2.classList.remove('over'); });
+  });
+  drop2.addEventListener('drop', function (e) { if (e.dataTransfer.files[0]) loadHistory(e.dataTransfer.files[0]); });
+  file2.addEventListener('change', function () { if (file2.files[0]) loadHistory(file2.files[0]); });
+
+  function loadHistory(f) {
+    err2.classList.add('hidden'); ok2.classList.add('hidden');
+    var fr = new FileReader();
+    fr.onload = function () {
+      try {
+        var h = K.parseHistory(fr.result);
+        S.history = h.map;
+        ok2.textContent = f.name + ' — ' + h.rows + '행 중 고객이력 ' + h.filled + '건 (고객 ' + h.customers + '명) 을 읽었습니다.';
+        ok2.classList.remove('hidden');
+        if (S.rows.length) { S.checks = K.runChecks(S.rows, S.keep, S.history); render(); }
+      } catch (e) {
+        err2.textContent = e.message || String(e);
+        err2.classList.remove('hidden');
+      }
+    };
+    fr.readAsArrayBuffer(f);
+  }
+
   function load(f) {
     err.classList.add('hidden');
     var fr = new FileReader();
@@ -31,7 +62,7 @@
           var why = R.transferReason(r);
           if (why) S.drop.push({ row: r, reason: why }); else S.keep.push(r);
         });
-        S.checks = K.runChecks(S.rows, S.keep);
+        S.checks = K.runChecks(S.rows, S.keep, S.history);
         render();
       } catch (e) { fail(e.message || String(e)); }
     };
@@ -115,6 +146,11 @@
           ['개통상태', '개통상태'], ['사유', '_subNo', 'wrap']]
       },
       {
+        key: 'gift', label: '상품권 메모', rows: c.gift, tone: 't',
+        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'],
+          ['가입.번호', '가입.번호'], ['사유', '_giftNote', 'wrap']]
+      },
+      {
         key: 'ex', label: '이관 제외', rows: S.drop, tone: 'c', plain: true,
         cols: [['행', function (d) { return d.row._r; }], ['고객명', function (d) { return d.row['고객명']; }],
           ['상품명', function (d) { return d.row['상품명']; }], ['상품옵션', function (d) { return d.row['상품옵션']; }],
@@ -126,7 +162,7 @@
   function render() {
     buildTabs();
     var c = S.checks;
-    var webErr = c.dueDate.length + c.sangbu.length + c.seller.length + c.product.length + c.subNo.length;
+    var webErr = c.dueDate.length + c.sangbu.length + c.seller.length + c.product.length + c.subNo.length + c.gift.length;
 
     $('#fileinfo').textContent = S.fileName + ' — 전체 ' + S.rows.length + '행';
     $('#cards').innerHTML = [
@@ -197,8 +233,8 @@
       keep: S.keep.length, drop: S.drop.length,
       bundleTarget: byCustomer(bundleRows(c.bundle, '결합대상')).length,
       bundleCheck: byCustomer(bundleRows(c.bundle, '확인필요')).length,
-      webError: c.dueDate.length + c.sangbu.length + c.seller.length + c.product.length + c.subNo.length,
-      ossLines: c.ossList.length, now: new Date().toLocaleString('ko-KR'), fileName: S.fileName
+      webError: c.dueDate.length + c.sangbu.length + c.seller.length + c.product.length + c.subNo.length + c.gift.length,
+      ossLines: c.ossList.length, gift: S.history ? c.gift.length : null, now: new Date().toLocaleString('ko-KR'), fileName: S.fileName
     });
     save(blob, 'KT검수_이관_' + stamp() + '.xlsx');
   });
