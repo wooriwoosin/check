@@ -148,7 +148,8 @@
       {
         key: 'gift', label: '상품권 메모', rows: c.gift, tone: 't',
         cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'],
-          ['가입.번호', '가입.번호'], ['사유', '_giftNote', 'wrap']]
+          ['고객이력', '_giftNote', 'wrap'],
+          ['이 고객의 가입 라인 — ★상품권 표기 없음', '_giftLines', 'wrap']]
       },
       {
         key: 'ex', label: '이관 제외', rows: S.drop, tone: 'c', plain: true,

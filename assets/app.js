@@ -141,23 +141,31 @@
     });
 
     /* 상품권 등록 메모 — 해피콜 파일(고객이력)이 있을 때만 검사한다.
-       메모는 라인이 아니라 고객 단위로 남기므로, 같은 고객의 어느 라인에든 있으면 통과. */
+
+       메모는 보통 '인터넷' 라인의 가입.번호에 남기므로, 인터넷+TV 든 인터넷+전화 든
+       같은 고객의 어느 한 라인에만 있으면 통과다.
+       ★ 표기 여부는 이관 제외된 라인(모바일 등)까지 포함해 전체 행에서 확인한다. */
     if (historyByCust) {
-      var starByCust = {}, giftByCust = {};
-      keep.forEach(function (r) {
+      var starByCust = {}, linesByCust = {}, giftByCust = {};
+      all.forEach(function (r) {
         var ck = R.customerKey(r);
         if (R.hasGiftMemo(r)) starByCust[ck] = true;
+      });
+      keep.forEach(function (r) {
+        var ck = R.customerKey(r);
+        (linesByCust[ck] = linesByCust[ck] || []).push(r);
         var g = R.giftStatus(historyByCust[ck]);
         if (g && !(giftByCust[ck] && giftByCust[ck].g.state === '등록')) giftByCust[ck] = { r: r, g: g };
         r._gift = g ? g.state : '';
       });
       Object.keys(giftByCust).forEach(function (ck) {
         var e = giftByCust[ck];
-        if (e.g.state === '예정' && !starByCust[ck]) {
-          e.r._giftNote = '고객이력 상품권 "' + (e.g.values.join(', ') || '(빈값)') +
-            '" 인데 가입.번호에 ★상품권 메모가 없음';
-          findings.gift.push(e.r);
-        }
+        if (e.g.state !== '예정' || starByCust[ck]) return;
+        e.r._giftNote = '고객이력 상품권 "' + (e.g.values.join(', ') || '(빈값)') + '"';
+        e.r._giftLines = (linesByCust[ck] || []).map(function (x) {
+          return '· ' + (x['상품명'] || '').replace('KT_', '') + '  ' + (x['가입.번호'] || '(빈값)');
+        }).join('\n');
+        findings.gift.push(e.r);
       });
     }
 
