@@ -87,6 +87,9 @@
     return order.map(function (k) { return map[k]; });
   }
 
+  /* 주민번호 앞 6자리. KOS 결합리스트의 생년월일과 같은 형태라 눈으로 대조하기 좋다. */
+  function birth(r) { return R.digits(r['주민번호']).slice(0, 6); }
+
   function lineSummary(g) {
     return g.lines.map(function (r) {
       return '· ' + (r['상품명'] || '').replace('KT_', '') + ' / ' + (r['상품옵션'] || '') +
@@ -100,6 +103,7 @@
       {
         key: 'bt', label: '결합대상', rows: byCustomer(bundleRows(c.bundle, '결합대상')), tone: 't',
         cols: [['행', function (g) { return g.head._r; }], ['고객명', function (g) { return g.head['고객명']; }],
+          ['생년월일', function (g) { return birth(g.head); }],
           ['셋트유형', function (g) { return g.head['셋트유형']; }],
           ['유형', function (g) { return g.head._bundle.type || '-'; }],
           ['속성', function (g) { return R.attrTokens(g.head).join(' / '); }],
@@ -109,6 +113,7 @@
       {
         key: 'bc', label: '결합 확인필요', rows: byCustomer(bundleRows(c.bundle, '확인필요')), tone: 'c',
         cols: [['행', function (g) { return g.head._r; }], ['고객명', function (g) { return g.head['고객명']; }],
+          ['생년월일', function (g) { return birth(g.head); }],
           ['셋트유형', function (g) { return g.head['셋트유형']; }],
           ['인증통신사', function (g) { return g.head['고객인증(값)']; }],
           ['가입 라인', lineSummary, 'wrap'],
@@ -116,50 +121,51 @@
       },
       {
         key: 'due', label: '개통기한', rows: c.dueDate, tone: 'c',
-        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['접수일', '접수일'],
+        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['생년월일', birth], ['접수일', '접수일'],
           ['개통기한', '개통기한'], ['사유', '_dueDate', 'wrap']]
       },
       {
         key: 'sb', label: '상부점', rows: c.sangbu, tone: 'c',
-        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['접점코드', '접점코드'],
+        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['생년월일', birth], ['접점코드', '접점코드'],
           ['상부점', '상부점'], ['사유', '_sangbu', 'wrap']]
       },
       {
         key: 'sl', label: '판매점 접수경로', rows: c.seller, tone: 'c',
-        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['협력점', '협력점'],
+        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['생년월일', birth], ['협력점', '협력점'],
           ['접수경로', '접수경로'], ['사유', '_seller', 'wrap']]
       },
       {
         key: 'ossl', label: 'OSS(원스톱전환)', rows: c.ossList, tone: 'c',
-        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'],
+        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['생년월일', birth],
           ['가입.번호', '가입.번호'], ['원스톱키', '_ossKey'], ['개통상태', '개통상태'],
           ['비고', '_ossNote', 'wrap']]
       },
       {
         key: 'pd', label: '상품 매핑', rows: c.product, tone: 't',
-        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['상품명', '상품명'],
+        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['생년월일', birth], ['상품명', '상품명'],
           ['상품옵션', '상품옵션'], ['사유', '_product', 'wrap']]
       },
       {
         key: 'sn', label: '가입번호', rows: c.subNo, tone: 'c',
-        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['가입.번호', '가입.번호'],
+        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['생년월일', birth], ['가입.번호', '가입.번호'],
           ['개통상태', '개통상태'], ['사유', '_subNo', 'wrap']]
       },
       {
         key: 'giftkt', label: 'KT 상품권 미등록', rows: c.giftKt, tone: 't',
-        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'],
+        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['생년월일', birth],
           ['인증', '고객인증(값)'], ['최근 상품권 이력', '_giftNote', 'wrap'],
           ['가입 라인', '_giftLines', 'wrap']]
       },
       {
         key: 'gift', label: '상품권 메모누락', rows: c.gift, tone: 't',
-        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'],
+        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['생년월일', birth],
           ['인증', '고객인증(값)'], ['최근 상품권 이력', '_giftNote', 'wrap'],
           ['이 고객의 가입 라인 — ★상품권 표기 없음', '_giftLines', 'wrap']]
       },
       {
         key: 'ex', label: '이관 제외', rows: S.drop, tone: 'c', plain: true,
         cols: [['행', function (d) { return d.row._r; }], ['고객명', function (d) { return d.row['고객명']; }],
+          ['생년월일', function (d) { return birth(d.row); }],
           ['상품명', function (d) { return d.row['상품명']; }], ['상품옵션', function (d) { return d.row['상품옵션']; }],
           ['사유', function (d) { return d.reason; }, 'wrap']]
       }
