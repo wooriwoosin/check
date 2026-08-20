@@ -285,6 +285,17 @@
 
   function hasGiftMemo(row) { return GIFT_STAR.test(row['가입.번호'] || ''); }
 
+  /* 서비스번호 자릿수는 상품에 따라 다르다.
+     버디AX·복수AP 는 12자리(예: 9999 0382 3033), 그 외 유선은 11자리. */
+  var SERVICE_NO_LEN = { 'GiGAWiFiBuddyax': 12, 'WiFi패키지플러스': 12 };
+  function serviceNoLength(normalizedProduct) {
+    return SERVICE_NO_LEN[normalizedProduct] || 11;
+  }
+
+  /* 진행 중이거나 완료된 건. 취소·보류 건은 검수해도 의미가 없다. */
+  var ACTIVE_STATUS = ['접수완료', '실적확인중', '개통완료'];
+  function isActive(row) { return ACTIVE_STATUS.indexOf((row['개통상태'] || '').trim()) >= 0; }
+
   /* 본인인증에 쓴 휴대폰이 KT 인가 (알뜰폰 포함). KT 면 인증 없이 바로 등록 가능.
      ※ 'SKT' 안에 'KT' 가 들어있으므로 타사를 먼저 걸러야 한다. */
   function isKtAuth(row) {
@@ -384,6 +395,7 @@
     mobileKtCustomers: mobileKtCustomers, judgeBundle: judgeBundle,
     nameTags: nameTags, attrTokens: attrTokens, dongpanTag: dongpanTag,
     giftStatus: giftStatus, hasGiftMemo: hasGiftMemo, historyEntries: historyEntries,
+    serviceNoLength: serviceNoLength, isActive: isActive, ACTIVE_STATUS: ACTIVE_STATUS,
     isKtAuth: isKtAuth
   };
 })(window);

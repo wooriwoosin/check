@@ -132,13 +132,15 @@
       if (!r._norm) { r._product = '상품옵션을 KT 상품명으로 매핑할 수 없음'; findings.product.push(r); }
 
       r._svc = R.serviceNo(r['가입.번호']);
+      var wantLen = R.serviceNoLength(r._norm);
       if (!r._svc) {
         if (['접수완료', '개통완료', '실적확인중', '개통대기'].indexOf(r['개통상태']) >= 0) {
           r._subNo = '가입.번호가 비어있는데 개통상태가 "' + r['개통상태'] + '"';
           findings.subNo.push(r);
         }
-      } else if (r._svc.length !== 11) {
-        r._subNo = '서비스번호가 ' + r._svc.length + '자리 (' + r._svc + ') — 11자리여야 함';
+      } else if (r._svc.length !== wantLen) {
+        r._subNo = '서비스번호가 ' + r._svc.length + '자리 (' + r._svc + ') — ' +
+          wantLen + '자리여야 함' + (wantLen === 12 ? ' (버디AX·복수AP)' : '');
         findings.subNo.push(r);
       }
     });
@@ -159,9 +161,11 @@
       });
       keep.forEach(function (r) {
         var ck = R.customerKey(r);
-        (linesByCust[ck] = linesByCust[ck] || []).push(r);
         var g = R.giftStatus(historyByCust[ck]);
         r._gift = g ? g.state : '';
+        // 취소·보류 건은 상품권을 볼 필요가 없다
+        if (!R.isActive(r)) return;
+        (linesByCust[ck] = linesByCust[ck] || []).push(r);
         if (g && !giftByCust[ck]) giftByCust[ck] = { r: r, g: g };
       });
       Object.keys(giftByCust).forEach(function (ck) {
