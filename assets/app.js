@@ -189,11 +189,17 @@
         r._giftLines = (linesByCust[ck] || []).map(function (x) {
           return '· ' + (x['상품명'] || '').replace('KT_', '') + '  ' + (x['가입.번호'] || '(빈값)');
         }).join('\n');
-        /* 가입.번호에 ★상품권 메모가 있으면 언젠가 찾아서 등록할 건이라 문제가 아니다.
-           메모조차 없이 '등록예정' 으로만 남은 건이 문제다. */
-        if (starByCust[ck]) return;
-        r._giftKind = R.isKtAuth(r) ? 'KT미등록' : '메모누락';
-        (R.isKtAuth(r) ? findings.giftKt : findings.gift).push(r);
+        /* KT 직영 고객은 인증 없이 접수하면서 바로 등록하는 게 정석이라,
+           ★상품권 메모를 남겼든 아니든 '등록예정' 으로 남아 있으면 등록 누락이다.
+           인증이 필요한 고객(타사·KT알뜰폰)은 나중에 등록해야 하므로
+           ★상품권 메모가 있으면 '언젠가 찾아서 등록할 건' 이라 문제가 아니다. */
+        if (R.isKtAuth(r)) {
+          r._giftKind = 'KT미등록';
+          findings.giftKt.push(r);
+        } else if (!starByCust[ck]) {
+          r._giftKind = '메모누락';
+          findings.gift.push(r);
+        }
       });
     }
 
