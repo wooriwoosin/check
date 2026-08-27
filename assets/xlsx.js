@@ -109,7 +109,9 @@
     if (sheet.cols && sheet.cols.length) {
       out.push('<cols>');
       sheet.cols.forEach(function (w, i) {
-        out.push('<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + w + '" customWidth="1"/>');
+        // 폭을 0 으로 주면 숨김 열 (매칭 키처럼 볼 일 없는 열)
+        out.push('<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + (w || 9) + '"' +
+          (w ? ' customWidth="1"' : ' hidden="1"') + '/>');
       });
       out.push('</cols>');
     }
