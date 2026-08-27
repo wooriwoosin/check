@@ -260,17 +260,20 @@
 
   $('#dl').addEventListener('click', function () {
     var c = S.checks;
-    var blob = E.build(S.keep, S.checks.ossList, {
+    E.build(S.keep, S.checks.ossList, {
       keep: S.keep.length, drop: S.drop.length,
       bundleTarget: byCustomer(bundleRows(c.bundle, '결합대상')).length,
       bundleCheck: byCustomer(bundleRows(c.bundle, '확인필요')).length,
       webError: c.dueDate.length + c.sangbu.length + c.seller.length + c.product.length + c.subNo.length + c.gift.length + c.giftKt.length,
       ossLines: c.ossList.length, gift: S.history ? c.gift.length : null, giftKt: S.history ? c.giftKt.length : null, now: new Date().toLocaleString('ko-KR'), fileName: S.fileName
+    }).then(function (blob) {
+      save(blob, 'KT검수_이관_' + stamp() + '.xlsx');
     });
-    save(blob, 'KT검수_이관_' + stamp() + '.xlsx');
   });
 
   $('#dlx').addEventListener('click', function () {
-    save(E.buildExcluded(S.drop), 'KT검수_이관제외_' + stamp() + '.xlsx');
+    E.buildExcluded(S.drop).then(function (blob) {
+      save(blob, 'KT검수_이관제외_' + stamp() + '.xlsx');
+    });
   });
 })();

@@ -23,24 +23,41 @@
 
   var utf8 = new TextEncoder();
 
-  // ── ZIP (store) ──────────────────────────────────────────────────────
+  // ── ZIP ──────────────────────────────────────────────────────────────
+  /* 가능하면 deflate 로 압축한다. 일반 xlsx 와 같은 형식이고 파일이 훨씬 작아져서
+     사내망 반입이 수월하다. 브라우저가 CompressionStream 을 지원하지 않으면
+     무압축(store)으로 떨어진다 — 그래도 Excel 은 정상적으로 읽는다. */
+  function deflateRaw(bytes) {
+    if (typeof CompressionStream !== 'function') return Promise.resolve(null);
+    try {
+      var cs = new CompressionStream('deflate-raw');
+      var w = cs.writable.getWriter();
+      w.write(bytes); w.close();
+      return new Response(cs.readable).arrayBuffer()
+        .then(function (buf) { return new Uint8Array(buf); })
+        .catch(function () { return null; });
+    } catch (e) { return Promise.resolve(null); }
+  }
+
   function zipStore(entries) {
     var locals = [], central = [], offset = 0;
 
     entries.forEach(function (e) {
       var name = utf8.encode(e.name);
-      var data = typeof e.data === 'string' ? utf8.encode(e.data) : e.data;
-      var crc = crc32(data);
+      var raw = typeof e.data === 'string' ? utf8.encode(e.data) : e.data;
+      var data = e.deflated || raw;
+      var method = e.deflated ? 8 : 0;
+      var crc = crc32(raw);
 
       var lh = new Uint8Array(30 + name.length);
       var lv = new DataView(lh.buffer);
       lv.setUint32(0, 0x04034b50, true);
       lv.setUint16(4, 20, true);          // version needed
       lv.setUint16(6, 0x0800, true);      // UTF-8 filename
-      lv.setUint16(8, 0, true);           // store
+      lv.setUint16(8, method, true);
       lv.setUint32(14, crc, true);
-      lv.setUint32(18, data.length, true);
-      lv.setUint32(22, data.length, true);
+      lv.setUint32(18, data.length, true);      // 압축 크기
+      lv.setUint32(22, raw.length, true);       // 원본 크기
       lv.setUint16(26, name.length, true);
       lh.set(name, 30);
       locals.push(lh, data);
@@ -51,10 +68,10 @@
       cv.setUint16(4, 20, true);
       cv.setUint16(6, 20, true);
       cv.setUint16(8, 0x0800, true);
-      cv.setUint16(10, 0, true);
+      cv.setUint16(10, method, true);
       cv.setUint32(16, crc, true);
       cv.setUint32(20, data.length, true);
-      cv.setUint32(24, data.length, true);
+      cv.setUint32(24, raw.length, true);
       cv.setUint16(28, name.length, true);
       cv.setUint32(42, offset, true);
       ch.set(name, 46);
@@ -182,7 +199,10 @@
         '<sheets>' + sheets.map(function (s, i) {
           return '<sheet name="' + esc(s.name) + '" sheetId="' + (i + 1) + '" r:id="rId' + (i + 1) + '"/>';
         }).join('') + '</sheets>' +
-        '<calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>'
+        /* calcId="0" 으로 두면 Excel 이 "더 오래된 버전이 만든 파일" 로 보고
+           열 때 반드시 전체 재계산한다. 계산 모드도 자동으로 못 박는다. */
+        '<calcPr calcId="0" calcMode="auto" fullCalcOnLoad="1" forceFullCalc="1"/>' +
+        '</workbook>'
     });
 
     files.push({
@@ -201,7 +221,14 @@
       files.push({ name: 'xl/worksheets/sheet' + (i + 1) + '.xml', data: sheetXml(s) });
     });
 
-    return zipStore(files);
+    return Promise.all(files.map(function (f) {
+      var raw = typeof f.data === 'string' ? utf8.encode(f.data) : f.data;
+      return deflateRaw(raw).then(function (z) {
+        // 압축 결과가 더 크면 무압축으로 둔다
+        if (z && z.length < raw.length) f.deflated = z;
+        return f;
+      });
+    })).then(zipStore);
   }
 
   global.XlsxWriter = { build: buildXlsx, colName: colName };
