@@ -77,8 +77,24 @@
       findings.ossList.push(r);
     });
 
+    /* 패밀리 상품은 유선+유선결합이라 검수 대상이 아닌데, 같은 고객이라도
+       TV 라인에는 '패밀리' 가 안 붙는다. 그래서 고객 단위로 한 번에 뺀다. */
+    var famCust = {};
+    keep.forEach(function (r) {
+      if (/패밀리|팸/.test(r['상품옵션'] || '')) famCust[R.customerKey(r)] = r['상품옵션'];
+    });
+
     keep.forEach(function (r) {
       r._bundle = R.judgeBundle(r, mk);
+      if (famCust[R.customerKey(r)] && r._bundle.verdict !== '해당없음') {
+        r._bundle = { verdict: '해당없음', type: null, reasons: [], standalone: r._bundle.standalone,
+                      excludedBy: '같은 고객에 패밀리 상품(' + famCust[R.customerKey(r)] + ') — 유선+유선결합' };
+      }
+      // 취소·보류 건은 결합을 걸 이유가 없다
+      if (!R.isActive(r) && r._bundle.verdict !== '해당없음') {
+        r._bundle = { verdict: '해당없음', type: null, reasons: [], standalone: r._bundle.standalone,
+                      excludedBy: '개통상태 "' + (r['개통상태'] || '') + '" — 취소·보류 건' };
+      }
       if (r._bundle.verdict !== '해당없음') findings.bundle.push(r);
 
       var s = parseDate(r['접수일']), p = parseDate(r['개통기한']);
@@ -121,6 +137,7 @@
          마커가 없으면 온라인 유입(인스타·유튜브 등)이라 검증 대상이 아니다. */
       var q = r['협력점'] || '', ax = (r['접수경로'] || '').trim();
       var star = /[☆★]/.test(q), box = /[□■]/.test(q);
+      if (!R.isActive(r)) { star = box = false; }   // 취소·보류 건은 넘어간다
       if (star && box) {
         r._seller = '협력점명에 ☆★ 와 □■ 가 함께 있음 — 협력점/판매점 구분 불가';
         findings.seller.push(r);
@@ -136,16 +153,9 @@
       if (!r._norm) { r._product = '상품옵션을 KT 상품명으로 매핑할 수 없음'; findings.product.push(r); }
 
       r._svc = R.serviceNo(r['가입.번호']);
-      var wantLen = R.serviceNoLength(r._norm);
-      if (!r._svc) {
-        if (['접수완료', '개통완료', '실적확인중', '개통대기'].indexOf(r['개통상태']) >= 0) {
-          r._subNo = '가입.번호가 비어있는데 개통상태가 "' + r['개통상태'] + '"';
-          findings.subNo.push(r);
-        }
-      } else if (r._svc.length !== wantLen) {
-        r._subNo = '서비스번호가 ' + r._svc.length + '자리 (' + r._svc + ') — ' +
-          wantLen + '자리여야 함' + (wantLen === 12 ? ' (버디AX·복수AP)' : '');
-        findings.subNo.push(r);
+      if (R.isActive(r)) {
+        var why = R.checkServiceNo(r['가입.번호'], r._norm);
+        if (why) { r._subNo = why; findings.subNo.push(r); }
       }
     });
 
@@ -179,13 +189,11 @@
         r._giftLines = (linesByCust[ck] || []).map(function (x) {
           return '· ' + (x['상품명'] || '').replace('KT_', '') + '  ' + (x['가입.번호'] || '(빈값)');
         }).join('\n');
-        if (R.isKtAuth(r)) {
-          r._giftKind = 'KT미등록';
-          findings.giftKt.push(r);
-        } else if (!starByCust[ck]) {
-          r._giftKind = '메모누락';
-          findings.gift.push(r);
-        }
+        /* 가입.번호에 ★상품권 메모가 있으면 언젠가 찾아서 등록할 건이라 문제가 아니다.
+           메모조차 없이 '등록예정' 으로만 남은 건이 문제다. */
+        if (starByCust[ck]) return;
+        r._giftKind = R.isKtAuth(r) ? 'KT미등록' : '메모누락';
+        (R.isKtAuth(r) ? findings.giftKt : findings.gift).push(r);
       });
     }
 

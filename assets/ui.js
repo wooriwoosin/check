@@ -110,6 +110,7 @@
         cols: [['행', function (g) { return g.head._r; }], ['고객명', function (g) { return g.head['고객명']; }],
           ['생년월일', function (g) { return birth(g.head); }],
           ['셋트유형', function (g) { return g.head['셋트유형']; }],
+          ['개통상태', function (g) { return g.head['개통상태']; }],
           ['유형', function (g) { return g.head._bundle.type || '-'; }],
           ['속성', function (g) { return R.attrTokens(g.head).join(' / '); }],
           ['가입 라인', lineSummary, 'wrap'],
@@ -120,23 +121,24 @@
         cols: [['행', function (g) { return g.head._r; }], ['고객명', function (g) { return g.head['고객명']; }],
           ['생년월일', function (g) { return birth(g.head); }],
           ['셋트유형', function (g) { return g.head['셋트유형']; }],
+          ['개통상태', function (g) { return g.head['개통상태']; }],
           ['인증통신사', function (g) { return g.head['고객인증(값)']; }],
           ['가입 라인', lineSummary, 'wrap'],
           ['근거', function (g) { return g.head._bundle.reasons.join('\n'); }, 'wrap']]
       },
       {
         key: 'due', label: '개통기한', rows: c.dueDate, tone: 'c',
-        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['생년월일', birth], ['접수일', '접수일'],
+        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['생년월일', birth], ['개통상태', '개통상태'], ['접수일', '접수일'],
           ['개통기한', '개통기한'], ['사유', '_dueDate', 'wrap']]
       },
       S.hasSangbu ? {
         key: 'sb', label: '상부점', rows: c.sangbu, tone: 'c',
-        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['생년월일', birth], ['접점코드', '접점코드'],
+        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['생년월일', birth], ['개통상태', '개통상태'], ['접점코드', '접점코드'],
           ['상부점', '상부점'], ['사유', '_sangbu', 'wrap']]
       } : null,
       {
         key: 'sl', label: '판매점 접수경로', rows: c.seller, tone: 'c',
-        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['생년월일', birth], ['협력점', '협력점'],
+        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['생년월일', birth], ['개통상태', '개통상태'], ['협력점', '협력점'],
           ['접수경로', '접수경로'], ['사유', '_seller', 'wrap']]
       },
       {
@@ -147,7 +149,7 @@
       },
       {
         key: 'pd', label: '상품 매핑', rows: c.product, tone: 't',
-        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['생년월일', birth], ['상품명', '상품명'],
+        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['생년월일', birth], ['개통상태', '개통상태'], ['상품명', '상품명'],
           ['상품옵션', '상품옵션'], ['사유', '_product', 'wrap']]
       },
       {

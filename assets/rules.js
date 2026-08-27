@@ -107,12 +107,19 @@
     '결합전', '결합 전', '결합후', '결합 후'];
   var NEG_PHRASE = ['결합불가', '결합 불가', '결합안됨', '결합 안됨'];
   var NEG_VALUE = /^(x|X|없음|미신청|불가|해당없음|무|-)\s*$/;
-  var SELF_SERVE = ['고객별도진행', '고객별도 진행', '고객센터안내', '고객센터 문의', '본인진행', '고객직접'];
+  /* 고객이 직접 / 고객센터로 안내한 건 → 우리가 안 걸어준다.
+     '고센'·'고샌' 은 현장에서 쓰는 고객센터 줄임말(오타 포함)이다. */
+  var SELF_SERVE = ['고객별도진행', '고객별도 진행', '고객센터안내', '고객센터 문의',
+    '본인진행', '고객직접', '고객센터', '고센', '고샌'];
   var FAMILY = ['패밀리', '팸'];
   /* 동판(유선+무선 동시판매)은 보통 유선 개통 후 무선을 진행하고 그다음 결합한다.
      "지금 쓰고 있는 KT 회선을 묶어달라" 와는 별개 건이라 결합 검수에서 뺀다. */
   var DONGPAN = /동판/;
-  var OTHER_CARRIER_BUNDLE = ['요즘가족결합', '요가결', '참쉬운가족결합', '가족무한사랑', '투게더'];
+  /* 타사 결합상품 — KT 건에 적혀 있어도 우리 결합 대상이 아니다. */
+  var OTHER_CARRIER_BUNDLE = [
+    '요즘가족결합', '요즘 가족 결합', '요가결',                    // SKT
+    '참쉬운결합', '참쉬운 결합', '참쉬운가족결합', '가족무한사랑',   // LG U+
+    '투게더'];
   var WIRELESS_BUNDLE = ['프리미엄싱글', '프리미엄 싱글', '프싱',
     '프리미엄가족결합', '프리미엄가족', '프가결',
     '총액결합할인', '총액결합', '총액 결합', '정액결합',
@@ -174,6 +181,9 @@
 
   /* '결합' 이 적힌 줄의 KT 휴대폰 번호를 우선한다.
      (연락처 줄의 알뜰폰 번호가 아니라 실제 결합 대상 번호를 집기 위함) */
+  /* '결합' 이 적힌 줄의 KT 휴대폰 번호만 인정한다.
+     전체 텍스트에서 찾으면 '명의자연락처&인증통신사: 010-… KT' 같은 줄이 걸려서
+     "우리한테 결합해달라" 가 아닌 건까지 결합 요청으로 오인한다. */
   function ktMobileNearBundle(text) {
     var lines = String(text).split('\n');
     for (var i = 0; i < lines.length; i++) {
@@ -182,8 +192,7 @@
         if (m) return m[0].trim();
       }
     }
-    var g = String(text).match(KT_MOBILE);
-    return g ? g[0].trim() : null;
+    return null;
   }
 
   function landlineEvidence(raw) {
@@ -238,8 +247,9 @@
   var GIFT_PENDING = /^(예정|등록예정|일괄등록예정|추후등록|추후|미등록|대기)$/;
   /* 상품권 코드 메모: 모이3 · 모농6 · 농지10 · 모롯마4 · 지류농협4 · 스카이 쿠폰4만원 …
      '부재2' '해피콜부재2차' 같은 메모와 섞이지 않게 브랜드 글자로 시작하는 것만 본다. */
-  var GIFT_CODE = /^(문자\+)?[모이농지신롯로다스][가-힣\s]{0,5}\d{1,3}\s*(만원|만|원|장)?$/;
-  var GIFT_CODE_NOISE = /신청|부재|취소|진행|일정|실사|인증|발송|변경|완료|확인|요청|예정|반송|재접/;
+  var GIFT_CODE =
+    /^(문자\+)?[모이농지신롯로다스팸][가-힣\s]{0,5}\s*\d{1,3}\s*(만원|만|원|장)?\s*(등록\s*완(료)?|완(료)?)?\s*$/;
+  var GIFT_CODE_NOISE = /신청|부재|취소|진행|일정|실사|인증|발송|변경|확인|요청|예정|반송|재접/;
   var GIFT_STAR = /상품권/;
 
   /* 한 건은 '작성자 :유형:내용 (일시)' 형태다.
@@ -287,9 +297,36 @@
 
   /* 서비스번호 자릿수는 상품에 따라 다르다.
      버디AX·복수AP 는 12자리(예: 9999 0382 3033), 그 외 유선은 11자리. */
-  var SERVICE_NO_LEN = { 'GiGAWiFiBuddyax': 12, 'WiFi패키지플러스': 12 };
-  function serviceNoLength(normalizedProduct) {
-    return SERVICE_NO_LEN[normalizedProduct] || 11;
+  var PHONE_PRODUCTS = ['일반전화', '인터넷전화'];
+  var AP_PRODUCTS = ['GiGAWiFiBuddyax', 'WiFi패키지플러스'];
+  // 지역번호 / 070 형태의 유선번호
+  var LANDLINE_IN_H = /(070|0\d{1,2})[-\s.]\d{1,4}[-\s.]\d{3,4}/;
+
+  /* 가입.번호 형식 점검. 문제가 없으면 null.
+       전화 상품      : 유선번호(031-123-1234 · 02-… · 070-…)만 있어도 된다
+       버디AX·복수AP  : 9999 로 시작하는 12자리
+       인터넷·TV      : z! 서비스번호 11자리 + 유선번호 둘 다 */
+  function checkServiceNo(rawH, normalizedProduct) {
+    var raw = String(rawH || '').trim();
+    var m = /[zZ]!\s*(\d{6,})/.exec(raw);
+    var runs = raw.match(/\d{6,}/g) || [];
+    var svc = m ? m[1] : (runs[0] || '');
+    var hasLand = LANDLINE_IN_H.test(raw);
+
+    if (!raw || (!svc && !hasLand)) return '가입.번호가 비어있음';
+
+    if (PHONE_PRODUCTS.indexOf(normalizedProduct) >= 0) {
+      return hasLand || svc ? null : '전화번호가 없음';
+    }
+    if (AP_PRODUCTS.indexOf(normalizedProduct) >= 0) {
+      if (svc.length !== 12) return '서비스번호가 ' + svc.length + '자리 (' + svc + ') — 버디AX·복수AP 는 12자리';
+      if (svc.slice(0, 4) !== '9999') return '버디AX·복수AP 서비스번호가 9999 로 시작하지 않음 (' + svc + ')';
+      return null;
+    }
+    if (!svc) return '서비스번호(z!…)가 없음';
+    if (svc.length !== 11) return '서비스번호가 ' + svc.length + '자리 (' + svc + ') — 11자리여야 함';
+    if (!hasLand) return '서비스번호는 있는데 전화번호(031·02·070…)가 없음';
+    return null;
   }
 
   /* 진행 중이거나 완료된 건. 취소·보류 건은 검수해도 의미가 없다. */
@@ -398,7 +435,7 @@
     mobileKtCustomers: mobileKtCustomers, judgeBundle: judgeBundle,
     nameTags: nameTags, attrTokens: attrTokens, dongpanTag: dongpanTag,
     giftStatus: giftStatus, hasGiftMemo: hasGiftMemo, historyEntries: historyEntries,
-    serviceNoLength: serviceNoLength, isActive: isActive, ACTIVE_STATUS: ACTIVE_STATUS,
+    checkServiceNo: checkServiceNo, isActive: isActive, ACTIVE_STATUS: ACTIVE_STATUS,
     isKtAuth: isKtAuth
   };
 })(window);
