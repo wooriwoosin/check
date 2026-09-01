@@ -15,18 +15,19 @@
 <main>
   <section class="panel">
     <h2>1. 웹 로우데이터 올리기</h2>
-    <p class="sub">우리 어드민에서 받은 <code>전체고객상품(YYYYMMDDHHMM).xls</code> 파일</p>
+    <p class="sub">우리 어드민에서 받은 <code>전체고객상품리스트_YYYYMMDD_HHMM.xlsx</code> 파일 (예전 <code>.xls</code> 도 됩니다)</p>
     <div id="drop" tabindex="0" role="button">
       <strong>파일을 끌어다 놓거나 클릭해서 선택</strong>
-      <span>.xls / .xlsx / .html</span>
+      <span>.xlsx / .xls / .html</span>
     </div>
     <input type="file" id="file" accept=".xls,.xlsx,.html,.htm" class="hidden">
     <div id="err" class="note err hidden"></div>
 
-    <h2 style="margin-top:22px">1-2. 해피콜 목록 올리기 <span style="font-weight:400;color:var(--muted)">— 선택</span></h2>
+    <div id="step2">
+    <h2 style="margin-top:22px">1-2. 해피콜 목록 올리기 <span style="font-weight:400;color:var(--muted)">— 예전 형식일 때만</span></h2>
     <p class="sub">
-      <code>해피콜 전체고객상품목록.xls</code> — <b>고객이력</b> 열이 있는 파일입니다.
-      올리면 <b>상품권 메모 검수</b>가 추가됩니다.
+      올린 파일에 <b>고객이력</b> 열이 없을 때만 씁니다. 올리면 <b>상품권 검수</b>가 추가됩니다.
+      <b id="step2note"></b>
     </p>
     <div id="drop2" tabindex="0" role="button">
       <strong>해피콜 목록을 끌어다 놓거나 클릭</strong>
@@ -35,6 +36,7 @@
     <input type="file" id="file2" accept=".xls,.xlsx,.html,.htm" class="hidden">
     <div id="err2" class="note err hidden"></div>
     <div id="ok2" class="note hidden"></div>
+    </div>
   </section>
 
   <section id="result" class="hidden">
@@ -71,6 +73,7 @@
 </main>
 
 <script src="assets/xlsx.js"></script>
+<script src="assets/xlsxread.js"></script>
 <script src="assets/kos-templates.js"></script>
 <script src="assets/rules.js"></script>
 <script src="assets/app.js"></script>

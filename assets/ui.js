@@ -35,16 +35,15 @@
     err2.classList.add('hidden'); ok2.classList.add('hidden');
     var fr = new FileReader();
     fr.onload = function () {
-      try {
-        var h = K.parseHistory(fr.result);
+      K.parseHistory(fr.result).then(function (h) {
         S.history = h.map;
         ok2.textContent = f.name + ' — ' + h.rows + '행 중 고객이력 ' + h.filled + '건 (고객 ' + h.customers + '명) 을 읽었습니다.';
         ok2.classList.remove('hidden');
         if (S.rows.length) { S.checks = K.runChecks(S.rows, S.keep, S.history); render(); }
-      } catch (e) {
+      }).catch(function (e) {
         err2.textContent = e.message || String(e);
         err2.classList.remove('hidden');
-      }
+      });
     };
     fr.readAsArrayBuffer(f);
   }
@@ -53,15 +52,15 @@
     err.classList.add('hidden');
     var fr = new FileReader();
     fr.onload = function () {
-      try {
-        var parsed = K.parseWebRaw(fr.result);
+      K.parseWebRaw(fr.result).then(function (parsed) {
         S.rows = parsed.rows;
         S.fileName = f.name;
         S.hasSangbu = parsed.header.indexOf('접점코드') >= 0;
-        /* 해피콜 목록을 그냥 올린 경우에도 되는 검수는 돌려준다.
-           접점코드·사업자번호가 없어서 상부점 검수와 이관 파일 생성만 빠진다. */
-        S.historyOnly = !S.hasSangbu && parsed.header.indexOf('고객이력') >= 0;
-        if (S.historyOnly) S.history = K.historyFromRows(parsed.rows).map;
+        S.hasHistory = parsed.header.indexOf('고객이력') >= 0;
+        /* 고객이력이 같은 파일에 있으면 해피콜 목록을 따로 올릴 필요가 없다. */
+        if (S.hasHistory) S.history = K.historyFromRows(parsed.rows).map;
+        /* 접점코드가 없으면(예전 해피콜 목록) 상부점 검수와 이관 파일 생성만 빠진다. */
+        S.historyOnly = !S.hasSangbu && S.hasHistory;
         S.keep = []; S.drop = [];
         S.rows.forEach(function (r) {
           var why = R.transferReason(r);
@@ -69,7 +68,7 @@
         });
         S.checks = K.runChecks(S.rows, S.keep, S.history);
         render();
-      } catch (e) { fail(e.message || String(e)); }
+      }).catch(function (e) { fail(e.message || String(e)); });
     };
     fr.onerror = function () { fail('파일을 읽지 못했습니다.'); };
     fr.readAsArrayBuffer(f);
@@ -186,6 +185,14 @@
 
     $('#fileinfo').textContent = S.fileName + ' — 전체 ' + S.rows.length + '행' +
       (S.historyOnly ? '  (해피콜 목록)' : '');
+    var step2 = $('#step2');
+    if (S.hasHistory) {
+      step2.classList.add('done');
+      $('#step2note').textContent = '이 파일에 고객이력이 들어있어서 따로 올릴 필요가 없습니다.';
+    } else {
+      step2.classList.remove('done');
+      $('#step2note').textContent = '';
+    }
     var warn = $('#modewarn');
     if (S.historyOnly) {
       warn.innerHTML = '<b>해피콜 목록만 올리셨습니다.</b> 고객이력이 있어서 <b>상품권 검수는 됩니다.</b><br>' +

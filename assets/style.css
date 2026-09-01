@@ -80,3 +80,8 @@ button.go:disabled { opacity: .45; cursor: not-allowed; }
 .note.err { background: var(--danger-soft); border-color: var(--danger); }
 .hidden { display: none; }
 code { background: #eef1f4; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+
+/* 이미 고객이력이 들어있는 파일이면 2단계는 흐리게 */
+#step2.done { opacity: .5; }
+#step2.done #drop2 { pointer-events: none; }
+#step2note { color: var(--ok); }

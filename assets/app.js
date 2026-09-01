@@ -8,7 +8,19 @@
 
   // ══ 웹 로우데이터 파싱 ══════════════════════════════════════════════
   /* 확장자는 .xls 지만 실제로는 cp949(euc-kr) 로 인코딩된 HTML <table> 이다. */
+  /* 두 가지 형식을 모두 받는다.
+       · .xlsx  — 진짜 엑셀 파일 (ZIP). 요즘 웹 어드민이 내려주는 형식
+       · .xls   — 확장자만 xls 이고 실제로는 cp949 HTML <table> (예전 형식)
+     반환값은 Promise 다. */
   function parseWebRaw(buffer) {
+    var head = new Uint8Array(buffer, 0, Math.min(4, buffer.byteLength));
+    if (head[0] === 0x50 && head[1] === 0x4B) {          // 'PK' → xlsx
+      return window.XlsxReader.readRows(buffer);
+    }
+    return Promise.resolve(parseHtmlTable(buffer));
+  }
+
+  function parseHtmlTable(buffer) {
     var text;
     try { text = new TextDecoder('euc-kr').decode(buffer); }
     catch (e) { text = new TextDecoder('utf-8').decode(buffer); }
@@ -212,11 +224,12 @@
      ※ 'No' 열은 두 파일에서 정렬이 달라 조인 키로 쓸 수 없다(단순 행 번호).
         고객이력은 어차피 고객 단위 기록이므로 주민번호 기반 고객키로 묶는다. */
   function parseHistory(buffer) {
-    var parsed = parseWebRaw(buffer);
-    if (parsed.header.indexOf('고객이력') < 0) {
-      throw new Error('이 파일에는 "고객이력" 열이 없습니다. 해피콜 전체고객상품목록이 맞는지 확인해주세요.');
-    }
-    return historyFromRows(parsed.rows);
+    return parseWebRaw(buffer).then(function (parsed) {
+      if (parsed.header.indexOf('고객이력') < 0) {
+        throw new Error('이 파일에는 "고객이력" 열이 없습니다. 해피콜 전체고객상품목록이 맞는지 확인해주세요.');
+      }
+      return historyFromRows(parsed.rows);
+    });
   }
 
   function historyFromRows(rows) {
