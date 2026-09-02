@@ -185,13 +185,15 @@
 
     $('#fileinfo').textContent = S.fileName + ' — 전체 ' + S.rows.length + '행' +
       (S.historyOnly ? '  (해피콜 목록)' : '');
+    /* 요즘 로우데이터에는 고객이력이 들어있어서 해피콜 목록을 따로 올릴 일이 없다.
+       고객이력이 없는 예전 형식일 때만 업로드 칸을 꺼내 보여준다. */
     var step2 = $('#step2');
-    if (S.hasHistory) {
-      step2.classList.add('done');
-      $('#step2note').textContent = '이 파일에 고객이력이 들어있어서 따로 올릴 필요가 없습니다.';
+    if (S.hasHistory || S.historyOnly) {
+      step2.classList.add('hidden');
     } else {
-      step2.classList.remove('done');
-      $('#step2note').textContent = '';
+      $('#step2note').innerHTML = '올리신 파일에 <b>고객이력</b> 열이 없어서 <b>상품권 검수가 빠졌습니다</b>. ' +
+        '해피콜 전체고객상품목록이 따로 있으면 올려주세요.';
+      step2.classList.remove('hidden');
     }
     var warn = $('#modewarn');
     if (S.historyOnly) {
