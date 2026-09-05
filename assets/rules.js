@@ -296,7 +296,7 @@
   /* 브랜드 없이 '상품권 등록완' '상품권발송완' 처럼만 적는 경우 */
   var GIFT_DONE = /상품권[^\n]{0,20}(등록|발송|지급)\s*(완|했|됐|되었)|상품권\s*완|(등록|발송)\s*완[^\n]{0,10}상품권/;
   /* 등록이 아니라 '해달라'·'하겠다' 는 요청·예정 메모 */
-  var GIFT_NOT_YET = /요청|부탁|주세요|해주십|예정|추후|확인중|부재|ㅂㅈ|취소|미등록|미지급|반송|안내|안왔|되어\s*있지\s*않|없어|없음|진행\s*중|진행하겠|진행한다|됩니다|바랍니다/;
+  var GIFT_NOT_YET = /요청(?!\s*완)|부탁|주세요|해주십|예정|추후|확인중|부재|ㅂㅈ|취소|미등록|미지급|반송|안내|안왔|되어\s*있지\s*않|없어|없음|진행\s*중|진행하겠|진행한다|됩니다|바랍니다/;
 
   function giftAmount(seg, brandRe) {
     var m = brandRe.exec(seg);
@@ -352,8 +352,13 @@
       var f = GIFT_FIELD.exec(e.content);
       if (f) {
         var v = f[1].trim();
-        sig = { state: (!v || GIFT_PENDING.test(v.replace(/\s/g, ''))) ? '예정' : '등록',
-                note: '상품권: ' + (v || '(빈값)') };
+        var pending = !v || GIFT_PENDING.test(v.replace(/\s/g, ''));
+        /* 같은 메모 안에서 'ㅇ상품권 : 예정' 아래 'ㅇ기타 : … 상품권 발송완' 처럼
+           다른 줄에 등록·발송 사실을 적어 두는 경우가 있다. 그 줄이 우선이다. */
+        var other = pending ? giftDoneMemo(e.content.replace(f[0], '')) : null;
+        sig = other
+          ? { state: '등록', note: '상품권 등록 메모 "' + other.slice(0, 40) + '"' }
+          : { state: pending ? '예정' : '등록', note: '상품권: ' + (v || '(빈값)') };
       } else {
         var done = giftDoneMemo(e.content);
         if (done) sig = { state: '등록', note: '상품권 등록 메모 "' + done.slice(0, 40) + '"' };
