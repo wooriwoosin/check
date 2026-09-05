@@ -115,6 +115,9 @@
     '별도고객진행', '별도고객', '별도진행', '별도요청',
     '고객센터안내', '고객센터 문의', '본인진행', '고객직접', '고객센터', '고센', '고샌'];
   var FAMILY = ['패밀리', '팸'];
+  /* '자회선완' '팸 자회선등록완료' '패밀리 등록완료' — 유선+유선결합을 이미 걸었다는 멘트.
+     이런 말이 있으면 결합을 확인할 게 없다. '자회선등록진행' 처럼 진행중인 건은 제외. */
+  var BUNDLE_DONE = /(자회선|패밀리|팸)\s*(결합)?\s*(등록)?\s*(완료|완)(?![가-힣])/;
   /* 동판(유선+무선 동시판매)은 보통 유선 개통 후 무선을 진행하고 그다음 결합한다.
      "지금 쓰고 있는 KT 회선을 묶어달라" 와는 별개 건이라 결합 검수에서 뺀다. */
   var DONGPAN = /동판/;
@@ -524,7 +527,7 @@
     INCLUDE_PRODUCTS: INCLUDE_PRODUCTS, EXCLUDE_PATTERNS: EXCLUDE_PATTERNS,
     transferReason: transferReason, customerKey: customerKey, serviceNo: serviceNo,
     phoneHead: phoneHead, digits: digits, normalizeProduct: normalizeProduct,
-    mobileKtCustomers: mobileKtCustomers, judgeBundle: judgeBundle,
+    mobileKtCustomers: mobileKtCustomers, judgeBundle: judgeBundle, BUNDLE_DONE: BUNDLE_DONE,
     nameTags: nameTags, attrTokens: attrTokens, dongpanTag: dongpanTag,
     giftStatus: giftStatus, hasGiftMemo: hasGiftMemo, historyEntries: historyEntries,
     checkServiceNo: checkServiceNo, isActive: isActive, ACTIVE_STATUS: ACTIVE_STATUS,

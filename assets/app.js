@@ -96,11 +96,27 @@
       if (/패밀리|팸/.test(r['상품옵션'] || '')) famCust[R.customerKey(r)] = r['상품옵션'];
     });
 
+    /* '자회선완' 처럼 유선+유선결합을 이미 걸었다는 메모가 있으면 확인할 게 없다.
+       메모는 기타·고객이력 어디에나 있고 라인마다 달라서 고객 단위로 모은다.
+       모바일 결합 요청은 별개 건이라 유무선결합으로 잡힌 건은 그대로 둔다. */
+    var doneCust = {};
+    keep.forEach(function (r) {
+      var ck = R.customerKey(r);
+      if (doneCust[ck]) return;
+      var m = R.BUNDLE_DONE.exec((r['기타'] || '') + '\n' + (r['고객이력'] || '') +
+                                 '\n' + ((historyByCust && historyByCust[ck]) || ''));
+      if (m) doneCust[ck] = m[0].trim();
+    });
+
     keep.forEach(function (r) {
       r._bundle = R.judgeBundle(r, mk);
       if (famCust[R.customerKey(r)] && r._bundle.verdict !== '해당없음') {
         r._bundle = { verdict: '해당없음', type: null, reasons: [], standalone: r._bundle.standalone,
                       excludedBy: '같은 고객에 패밀리 상품(' + famCust[R.customerKey(r)] + ') — 유선+유선결합' };
+      } else if (doneCust[R.customerKey(r)] && r._bundle.verdict !== '해당없음' &&
+                 String(r._bundle.type || '').indexOf('유무선') < 0) {
+        r._bundle = { verdict: '해당없음', type: null, reasons: [], standalone: r._bundle.standalone,
+                      excludedBy: '결합 등록 완료 메모("' + doneCust[R.customerKey(r)] + '")' };
       }
       // 취소·보류 건은 결합을 걸 이유가 없다
       if (!R.isActive(r) && r._bundle.verdict !== '해당없음') {
