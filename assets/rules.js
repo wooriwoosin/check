@@ -85,7 +85,8 @@
     if (String(productName || '').indexOf('부가상품') >= 0) return '';
     if (s.indexOf('일반전화') >= 0) return '일반전화';
     if (s.indexOf('인터넷전화') >= 0) return '인터넷전화';
-    if (s.indexOf('TV') >= 0 || /^T[가-힣]/.test(s)) {
+    // 상품명이 KT_TV 면 옵션에 'TV' 글자가 없어도 TV 등급이다 — 예: '(추단)모든G'
+    if (s.indexOf('TV') >= 0 || /^T[가-힣]/.test(s) || String(productName || '').indexOf('TV') >= 0) {
       for (var i = 0; i < TV_GRADES.length; i++) {
         if (s.indexOf(TV_GRADES[i]) >= 0) return 'TV' + TV_GRADES[i];
       }
@@ -117,7 +118,8 @@
   var DONGPAN = /동판/;
   /* 타사 결합상품 — KT 건에 적혀 있어도 우리 결합 대상이 아니다. */
   var OTHER_CARRIER_BUNDLE = [
-    '요즘가족결합', '요즘 가족 결합', '요가결',                    // SKT
+    '요즘가족결합', '요즘 가족 결합', '요가결',
+    '요즘우리집결합', '요즘 우리집 결합', '우리집결합',              // SKT
     '참쉬운결합', '참쉬운 결합', '참쉬운가족결합', '가족무한사랑',   // LG U+
     '투게더'];
   var WIRELESS_BUNDLE = ['프리미엄싱글', '프리미엄 싱글', '프싱',
@@ -125,6 +127,31 @@
     '총액결합할인', '총액결합', '총액 결합', '정액결합',
     '모바일결합', '머바일결합', '모결'];
   var NAME_TAGS = ['모', '(모)', '모결', '결'];
+  /* 판매자·고객이 알아서 하는 결합. 본사(KT)를 통해 신청하는 것도 우리 몫이 아니다. */
+  var NOT_OURS = ['직접결합', '결합직접', '본사통한결합', '본사통해', '본사를통해', '본사결합',
+    '미결합', '미결', '결합안함', '결합X', '결합없이'];
+  /* 홈결합(인터넷+TV 기본결합)은 접수 시 기본으로 들어가는 것이라 검수 대상이 아니다. */
+  var HOME_BUNDLE = /^[ㅇoO0*\s]*(인티)?홈\s*결?(합)?\s*(TM)?\s*(등록)?\s*$/;
+  /* 결합란에 적혀 있어도 결합 내용이 아닌 값 — 요금 안내·약정·상품권 안내문 */
+  var NOT_BUNDLE_VALUE = [
+    /^[\s\d,.\-원>+]*$/,          // 금액·기호만
+    /쿠폰\s*적용/, /위약금/, /^약정/, /상품권/
+  ];
+  /* 결합란 안에서만 인정하는 결합 이름 — 본문 전체에서 찾으면 요금 '총액' 등과 섞인다. */
+  var FIELD_BUNDLE = [
+    { re: /총액/, name: '총액결합' },
+    { re: /정액/, name: '정액결합' },
+    { re: /프\s*[리미]\s*미\s*엄|프가|프싱/, name: '프리미엄결합' },
+    { re: /신혼\s*미리/, name: '신혼미리결합' }
+  ];
+
+  function ignorableValue(v) {
+    if (HOME_BUNDLE.test(v)) return '홈결합(기본결합)';
+    for (var i = 0; i < NOT_BUNDLE_VALUE.length; i++) {
+      if (NOT_BUNDLE_VALUE[i].test(v)) return '결합 내용 아님';
+    }
+    return null;
+  }
 
   /* 서식지 보기목록: '결합유형 (프가=1/ 프싱=2/ 총액=3/ 정액=4/ 신혼미리결합=5) :1'
      → 목록을 지우고 뒤의 번호만 값으로 해석한다. */
@@ -245,12 +272,50 @@
   var HIST_TS = /\((\d{4}-\d{2}-\d{2} \d{2}:\d{2})\)/g;
   var GIFT_FIELD = /^[ㅇoO0*●■□·\-\s]*상품권\s*[:：]\s*(.*)$/m;
   var GIFT_PENDING = /^(예정|등록예정|일괄등록예정|추후등록|추후|미등록|대기)$/;
-  /* 상품권 코드 메모: 모이3 · 모농6 · 농지10 · 모롯마4 · 지류농협4 · 스카이 쿠폰4만원 …
-     '부재2' '해피콜부재2차' 같은 메모와 섞이지 않게 브랜드 글자로 시작하는 것만 본다. */
-  var GIFT_CODE =
-    /^(문자\+)?[모이농지신롯로다스팸][가-힣\s]{0,5}\s*\d{1,3}\s*(만원|만|원|장)?\s*(등록\s*완(료)?|완(료)?)?\s*$/;
-  var GIFT_CODE_NOISE = /신청|부재|취소|진행|일정|실사|인증|발송|변경|확인|요청|예정|반송|재접/;
   var GIFT_STAR = /상품권/;
+
+  /* 상품권 브랜드 약어 — 종류·금액은 https://wooriwoosin.github.io/giftcardlist 기준.
+     ① 코드형: 브랜드 약어라 금액만 붙어 있어도 상품권 등록 메모로 본다.
+        모이4 · 이모4 · 모농4 · 농모6 · 모롯7 · 로못4 · 롯마4 · 농지5 · 농금3 · 농4 ·
+        모다4 · 농협금액3 · 신세계6 · GS칼모5 …
+     ② 낱말형: 주소·계좌에도 나오는 흔한 낱말이라 '등록/발송/완' 같은 말이 같이 있어야 본다.
+        모바일롯데7등록 · 농협지류상품권 4만원 … */
+  var GIFT_BRAND_CODE = /(모이|이모|모농|농모|모현|모롯|로못|롯마|롯모|롯|모다|모KT|농협금액|농협지류|농지|지류|농금|다이소|칼모|GS칼|신세계|롯데마트|이마트|농)/;
+  var GIFT_BRAND_WORD = /(농협|농촌사랑|이마트|현대|롯데|하나로|SSG|쓱|신세계|칼텍스|GS주유|KT통합|통합상품권)/;
+  /* '다6' '현10' 처럼 한 글자로만 줄여 쓴 경우 — 문장에 섞이면 오인하므로
+     짧은 메모에서 브랜드 글자 바로 뒤에 금액이 붙은 것만 인정한다. */
+  var GIFT_BRAND_TIGHT = /(^|[\s+\/(])(다|이|현)\s?(10|[3-9])\s*(만원|만)?(?![\d,\-])/;
+  var GIFT_CTX = /상품권|등록|발송|지급|완/;
+  /* 금액은 3~10만원이다. '농협 356-0662-1665-03' 같은 계좌번호와 섞이지 않게
+     숫자 뒤에 숫자·쉼표·하이픈이 더 오면 금액으로 보지 않는다. */
+  var GIFT_AMOUNT = /^[가-힣\s]{0,6}(10|[3-9])\s*(만원|만|장)?(?![\d,\-])/;
+  /* 브랜드 없이 '상품권 등록완' '상품권발송완' 처럼만 적는 경우 */
+  var GIFT_DONE = /상품권[^\n]{0,20}(등록|발송|지급)\s*(완|했|됐|되었)|상품권\s*완|(등록|발송)\s*완[^\n]{0,10}상품권/;
+  /* 등록이 아니라 '해달라'·'하겠다' 는 요청·예정 메모 */
+  var GIFT_NOT_YET = /요청|부탁|주세요|해주십|예정|추후|확인중|부재|ㅂㅈ|취소|미등록|미지급|반송|안내|안왔|되어\s*있지\s*않|없어|없음|진행\s*중|진행하겠|진행한다|됩니다|바랍니다/;
+
+  function giftAmount(seg, brandRe) {
+    var m = brandRe.exec(seg);
+    if (!m) return null;
+    var a = GIFT_AMOUNT.exec(seg.slice(m.index + m[0].length));
+    return a ? m[0] + a[1] : null;
+  }
+
+  /* 한 메모에 '농협지류상품권 4만원 요청 / 농지4등록완료' 처럼
+     요청과 등록이 같이 적히므로 '/' 와 줄바꿈으로 잘라 조각별로 본다. */
+  function giftDoneMemo(content) {
+    var segs = String(content).split(/[\/\n]/);
+    for (var i = 0; i < segs.length; i++) {
+      var seg = segs[i].trim();
+      if (!seg || GIFT_NOT_YET.test(seg)) continue;
+      var hit = giftAmount(seg, GIFT_BRAND_CODE);
+      if (!hit && GIFT_CTX.test(seg)) hit = giftAmount(seg, GIFT_BRAND_WORD);
+      if (!hit && seg.length <= 12 && GIFT_BRAND_TIGHT.test(seg)) hit = seg;
+      if (!hit && GIFT_DONE.test(seg)) hit = seg;
+      if (hit) return seg;
+    }
+    return null;
+  }
 
   /* 한 건은 '작성자 :유형:내용 (일시)' 형태다.
      작성자/유형 사이 개행은 원본 HTML 에 따라 살아 있기도 하고 아니기도 해서
@@ -285,8 +350,9 @@
         var v = f[1].trim();
         sig = { state: (!v || GIFT_PENDING.test(v.replace(/\s/g, ''))) ? '예정' : '등록',
                 note: '상품권: ' + (v || '(빈값)') };
-      } else if (GIFT_CODE.test(e.content) && !GIFT_CODE_NOISE.test(e.content)) {
-        sig = { state: '등록', note: '상품권 등록 메모 "' + e.content + '"' };
+      } else {
+        var done = giftDoneMemo(e.content);
+        if (done) sig = { state: '등록', note: '상품권 등록 메모 "' + done.slice(0, 40) + '"' };
       }
       if (sig && (!latest || e.ts > latest.ts)) { sig.ts = e.ts; latest = sig; }
     });
@@ -371,15 +437,31 @@
     for (var i = 0; i < fields.length; i++) {
       if (has(fields[i], FAMILY)) return skip('결합 필드값이 패밀리 — 유선+유선결합');
       if (has(fields[i], SELF_SERVE)) return skip('고객이 직접 진행 — 우리가 안 걸어줌');
+      var nm = has(fields[i], NOT_OURS);
+      if (nm) return skip('판매자·고객이 직접 진행(' + fields[i] + ') — 우리 결합 아님');
       var o = has(fields[i], OTHER_CARRIER_BUNDLE);
       if (o) return skip('타사 결합상품(' + fields[i] + ') — KT 결합 아님');
     }
+    // 홈결합(기본결합)·요금 안내처럼 결합 내용이 아닌 값은 빼고 본다
+    var dropped = null;
+    fields = fields.filter(function (v) {
+      var why = ignorableValue(v);
+      if (why) { dropped = dropped || why + '(' + v + ')'; return false; }
+      return true;
+    });
 
     var reasons = [], btype = null;
 
     // 유형1: 유무선결합
     fields.forEach(function (v) {
-      if (has(v, WIRELESS_BUNDLE)) { reasons.push("결합 필드 '" + v + "'"); btype = '유무선결합'; }
+      if (has(v, WIRELESS_BUNDLE)) { reasons.push("결합 필드 '" + v + "'"); btype = '유무선결합'; return; }
+      for (var f = 0; f < FIELD_BUNDLE.length; f++) {
+        if (FIELD_BUNDLE[f].re.test(v.replace(/\s/g, ''))) {
+          reasons.push("결합 필드 '" + v + "' — " + FIELD_BUNDLE[f].name);
+          btype = '유무선결합';
+          return;
+        }
+      }
     });
     var matched = WIRELESS_BUNDLE.filter(function (k) { return has(text, [k]); });
     if (matched.length) {
@@ -410,6 +492,7 @@
     }
 
     var leftover = fields.filter(function (v) { return !has(v, WIRELESS_BUNDLE); });
+    if (!fields.length && !reasons.length && dropped) return skip(dropped);
     if (leftover.length && !btype) {
       return {
         verdict: '확인필요', type: null, standalone: standalone, excludedBy: null,
