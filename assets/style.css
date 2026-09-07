@@ -15,7 +15,11 @@ header {
   padding: 18px 24px; position: sticky; top: 0; z-index: 10;
 }
 header h1 { margin: 0; font-size: 18px; }
-header h1 #ver { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 6px; }
+header h1 #ver {
+  display: inline-block; margin-left: 8px; padding: 2px 9px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent);
+  font-size: 12px; font-weight: 600; vertical-align: middle;
+}
 header p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
 main { max-width: 1180px; margin: 0 auto; padding: 24px; }
 .panel {
