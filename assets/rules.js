@@ -299,21 +299,33 @@
        ④ 브랜드 없는 완료말  상품권, 문자 완 · 발송완 · 등록 완입니다
      ④ 는 상품권 얘기가 오간 이력에서만 인정하고, 청구·복지·계좌처럼
      따로 등록하는 게 적힌 줄은 상품권 등록으로 보지 않는다. */
-  var GIFT_BRAND_CODE = /(모이|이모|모농|농모|모현|현모|모롯|로못|롯마|롯모|롯데마트|롯|모다|모KT|농협금액|농협지류|농지|지류|농금|다이소|칼모|GS칼|GS모|GS주유|GS|신세계|이마트|쓱페이|쓱|SSG|ahdl|농)/;
-  var GIFT_BRAND_WORD = /(농촌사랑|현대|롯데|하나로|신세|KT통합|통합상품권|칼텍스)/;
+  var GIFT_BRAND_CODE = /(모이|이모|모농|농모|모현|현모|모롯|로못|롯마|롯모|롯데마트|롯|모다|모KT|농협금액|농협지류|농지|지류|농금|다이소|칼모|GS칼|GS모|GS주유|GS|신세계|이마트|쓱페이|쓱|SSG|ahdl|농)/i;
+  var GIFT_BRAND_WORD = /(농촌사랑|현대|롯데|하나로|신세|KT통합|통합상품권|칼텍스)/i;
   var GIFT_CTX = /상품권|등록|발송|지급|완/;
   /* 금액은 3~10만원. '농협 356-0662-1665-03' 같은 계좌번호와 섞이지 않게
      숫자 뒤에 숫자·쉼표·하이픈이 더 오면 금액으로 보지 않는다. */
   var GIFT_AMOUNT = /^[가-힣\s]{0,6}(10|[3-9])\s*(만원|만|장)?(?![\d,\-])/;
   var GIFT_AMOUNT_PRE = /(^|[^\d,.\-])(10|[3-9])\s*(만원|만)?\s*[가-힣]{0,2}\s*$/;
+  /* 'GS칼텍스 모바일 주유 상품권 6만원' 처럼 브랜드와 금액 사이가 먼 경우.
+     '만원' 을 붙여 쓴 금액은 상품권 금액이 확실하므로 줄 안 어디에 있어도 인정한다. */
+  var GIFT_AMOUNT_WON = /(^|[^\d])(10|[3-9])\s*만\s*원?(?![\d])/;
   /* '다6' '현10' '신6' 처럼 한 글자로 줄여 쓴 경우 — 짧은 메모에서 금액이 바로 붙은 것만 */
   var GIFT_BRAND_TIGHT = /(^|[\s+\/(])(다|이|현|신)\s?(10|[3-9])\s*(만원|만)?(?![\d,\-])/;
-  /* 끝났다는 말 — '등록완' '발송 완료' '등완' '등록해드렸습니다' '완' */
-  var GIFT_DONE_WORD = /(등록|발송|지급)\s*(완|했|해|됐|되었|드렸)|등완|완료|(^|[\s,、])완([\s!.~]|$)/;
+  /* 브랜드도 '상품권' 도 없는 줄에서 쓰는 완료말.
+     '설치완료' '해피콜완료' '사은품 수정완료' 처럼 상품권과 상관없는 완료와 섞이지 않게
+     '등록/발송/지급이 끝났다' 는 뜻일 때만 본다. */
+  var GIFT_DONE_WORD = /(등록|발송|지급)\s*(완|했|됐|되었)|등완|^\s*(재)?발송\s*완(료)?(\s*변경\s*완(료)?)?\s*$|^\s*변경\s*완(료)?\s*$/;
   /* 브랜드나 '상품권' 이 같이 적힌 줄에서만 쓰는 느슨한 완료말 — '모이 문자완' '상품권완' */
   var GIFT_DONE_LOOSE = /완\s*$|완료|등완|(등록|발송|지급)\s*(완|했|해|됐|되었|드렸)/;
+  /* '사은품완' 한 마디만 남기기도 한다. '사은품 수정완료' 같은 다른 말과 섞이지 않게
+     조각 전체가 이 형태일 때만 본다. */
+  var GIFT_DONE_GOODS = /^사은품\s*완(료)?$/;
+  /* '등록완' '등완' 처럼 끝났다고 못박은 말이 있으면 같은 줄의 '요청'·'없음' 은
+     그 앞 사정을 적어 둔 것이다. 예) '모농7 → 모다7 등록완 (고객요청)'
+                                  '3만원상품권중 GS주유권없음 > 모농3 등완' */
+  var GIFT_DONE_STRONG = /등완|(등록|발송|지급)\s*완/;
   /* 상품권 말고 따로 등록하는 것들 — 이 말만 있는 줄의 '등록 완' 은 상품권이 아니다 */
-  var GIFT_OTHER_TOPIC = /청구|복지|자동이체|이메일|메일|계좌|은행|카드|팸|패밀리|자회선|결합|이미징|주소|와이파이|일정|해피콜|셋탑|지니/;
+  var GIFT_OTHER_TOPIC = /청구|복지|자동이체|이메일|메일|계좌|은행|카드|팸|패밀리|자회선|결합|이미징|주소|와이파이|일정|해피콜|셋탑|지니|사은품|설치/;
   /* 아직 안 된 것 — '등록 부탁', '인증 요청', 부재·거절·미등록 …
      '요청하여 모이7 등완' 처럼 고객이 요청해서 처리한 건과 구분하려고
      '요청' 은 단독이 아니라 '등록/인증 + 요청', '요청드립니다' 형태만 본다. */
@@ -332,10 +344,11 @@
   /* 한 메모에 '농협지류상품권 4만원 요청 / 농지4등록완료' 처럼
      아직인 것과 끝난 것이 같이 적히므로 '/' · '>>' · 줄바꿈으로 잘라 조각별로 본다. */
   function giftDoneMemo(content, giftTopic) {
-    var segs = String(content).split(/[\/\n]|>>/);
+    var segs = String(content).split(/[\/\n>→]/);
     for (var i = 0; i < segs.length; i++) {
       var seg = segs[i].trim();
-      if (!seg || GIFT_NOT_YET.test(seg)) continue;
+      if (!seg) continue;
+      if (GIFT_NOT_YET.test(seg) && !GIFT_DONE_STRONG.test(seg)) continue;
 
       var hit = giftAmount(seg, GIFT_BRAND_CODE);                        // ①②
       if (!hit) {
@@ -346,6 +359,9 @@
         if (w && (w.pre || GIFT_CTX.test(seg))) hit = w;
       }
       if (!hit && seg.length <= 12 && GIFT_BRAND_TIGHT.test(seg)) hit = { hit: seg };
+      if (!hit && GIFT_AMOUNT_WON.test(seg) &&
+          (GIFT_BRAND_CODE.test(seg) || GIFT_BRAND_WORD.test(seg))) hit = { hit: seg };
+      if (!hit && giftTopic && GIFT_DONE_GOODS.test(seg)) hit = { hit: seg };
 
       if (!hit) {                                                        // ③④
         var mine = /상품권/.test(seg) || !GIFT_OTHER_TOPIC.test(seg);
@@ -411,6 +427,12 @@
      가입.번호에 서비스번호·전화번호 말고 '서비스계약번호'(11자리)가 더 있어야 한다.
        예) z!63252443327 / 031-123-1234 / 63252443327
      숫자 사이 하이픈은 끊어서 세므로 전화번호는 11자리로 잡히지 않는다. */
+  /* 유선기타(KT-biz)는 상품권 지급 대상이 아니다.
+     서식지에 'ㅇ상품권 : 예정' 이 그대로 남아 있어도 검수하지 않는다. */
+  function giftEligible(row) {
+    return !/^유선기타/.test(String(row['상품명'] || ''));
+  }
+
   function hasCouponTag(row) {
     return /쿠폰/.test(attrTokens(row).join(' '));
   }
@@ -587,7 +609,7 @@
     nameTags: nameTags, attrTokens: attrTokens, dongpanTag: dongpanTag,
     giftStatus: giftStatus, hasGiftMemo: hasGiftMemo, historyEntries: historyEntries,
     checkServiceNo: checkServiceNo, isActive: isActive, ACTIVE_STATUS: ACTIVE_STATUS,
-    hasCouponTag: hasCouponTag, contractNo: contractNo,
+    hasCouponTag: hasCouponTag, contractNo: contractNo, giftEligible: giftEligible,
     isKtAuth: isKtAuth
   };
 })(window);

@@ -222,8 +222,8 @@
         var ck = R.customerKey(r);
         var g = R.giftStatus(historyByCust[ck]);
         r._gift = g ? g.state : '';
-        // 취소·보류 건은 상품권을 볼 필요가 없다
-        if (!R.isActive(r)) return;
+        // 취소·보류 건과 유선기타(상품권 미지급 상품)는 볼 필요가 없다
+        if (!R.isActive(r) || !R.giftEligible(r)) return;
         (linesByCust[ck] = linesByCust[ck] || []).push(r);
         if (g && !giftByCust[ck]) giftByCust[ck] = { r: r, g: g };
       });
