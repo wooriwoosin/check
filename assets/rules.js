@@ -281,44 +281,69 @@
   var GIFT_PENDING = /^(예정|등록예정|일괄등록예정|추후등록|추후|미등록|대기)$/;
   var GIFT_STAR = /상품권/;
 
-  /* 상품권 브랜드 약어 — 종류·금액은 https://wooriwoosin.github.io/giftcardlist 기준.
-     ① 코드형: 브랜드 약어라 금액만 붙어 있어도 상품권 등록 메모로 본다.
-        모이4 · 이모4 · 모농4 · 농모6 · 모롯7 · 로못4 · 롯마4 · 농지5 · 농금3 · 농4 ·
-        모다4 · 농협금액3 · 신세계6 · GS칼모5 …
-     ② 낱말형: 주소·계좌에도 나오는 흔한 낱말이라 '등록/발송/완' 같은 말이 같이 있어야 본다.
-        모바일롯데7등록 · 농협지류상품권 4만원 … */
-  var GIFT_BRAND_CODE = /(모이|이모|모농|농모|모현|모롯|로못|롯마|롯모|롯|모다|모KT|농협금액|농협지류|농지|지류|농금|다이소|칼모|GS칼|신세계|롯데마트|이마트|농)/;
-  var GIFT_BRAND_WORD = /(농협|농촌사랑|이마트|현대|롯데|하나로|SSG|쓱|신세계|칼텍스|GS주유|KT통합|통합상품권)/;
-  /* '다6' '현10' 처럼 한 글자로만 줄여 쓴 경우 — 문장에 섞이면 오인하므로
-     짧은 메모에서 브랜드 글자 바로 뒤에 금액이 붙은 것만 인정한다. */
-  var GIFT_BRAND_TIGHT = /(^|[\s+\/(])(다|이|현)\s?(10|[3-9])\s*(만원|만)?(?![\d,\-])/;
+  /* ── 상품권 등록 메모 읽기 ────────────────────────────────────────
+     종류·금액은 https://wooriwoosin.github.io/giftcardlist 기준.
+     현장에서 쓰는 표기가 워낙 제각각이라 네 가지로 나눠서 본다.
+       ① 브랜드 + 금액       모이4 · 모롯7 · 현모10 · GS모 6 · 쓱페이4 · 신6 · ahdl10(모이 영타)
+       ② 금액 + 브랜드       10현대 · 상6 이마트
+       ③ 브랜드 + 완료말     모이 문자완 · 다이소 … 등록해드렸습니다
+       ④ 브랜드 없는 완료말  상품권, 문자 완 · 발송완 · 등록 완입니다
+     ④ 는 상품권 얘기가 오간 이력에서만 인정하고, 청구·복지·계좌처럼
+     따로 등록하는 게 적힌 줄은 상품권 등록으로 보지 않는다. */
+  var GIFT_BRAND_CODE = /(모이|이모|모농|농모|모현|현모|모롯|로못|롯마|롯모|롯데마트|롯|모다|모KT|농협금액|농협지류|농지|지류|농금|다이소|칼모|GS칼|GS모|GS주유|GS|신세계|이마트|쓱페이|쓱|SSG|ahdl|농)/;
+  var GIFT_BRAND_WORD = /(농촌사랑|현대|롯데|하나로|신세|KT통합|통합상품권|칼텍스)/;
   var GIFT_CTX = /상품권|등록|발송|지급|완/;
-  /* 금액은 3~10만원이다. '농협 356-0662-1665-03' 같은 계좌번호와 섞이지 않게
+  /* 금액은 3~10만원. '농협 356-0662-1665-03' 같은 계좌번호와 섞이지 않게
      숫자 뒤에 숫자·쉼표·하이픈이 더 오면 금액으로 보지 않는다. */
   var GIFT_AMOUNT = /^[가-힣\s]{0,6}(10|[3-9])\s*(만원|만|장)?(?![\d,\-])/;
-  /* 브랜드 없이 '상품권 등록완' '상품권발송완' 처럼만 적는 경우 */
-  var GIFT_DONE = /상품권[^\n]{0,20}(등록|발송|지급)\s*(완|했|됐|되었)|상품권\s*완|(등록|발송)\s*완[^\n]{0,10}상품권/;
-  /* 등록이 아니라 '해달라'·'하겠다' 는 요청·예정 메모 */
-  var GIFT_NOT_YET = /요청(?!\s*완)|부탁|주세요|해주십|예정|추후|확인중|부재|ㅂㅈ|취소|미등록|미지급|반송|안내|안왔|되어\s*있지\s*않|없어|없음|진행\s*중|진행하겠|진행한다|됩니다|바랍니다/;
+  var GIFT_AMOUNT_PRE = /(^|[^\d,.\-])(10|[3-9])\s*(만원|만)?\s*[가-힣]{0,2}\s*$/;
+  /* '다6' '현10' '신6' 처럼 한 글자로 줄여 쓴 경우 — 짧은 메모에서 금액이 바로 붙은 것만 */
+  var GIFT_BRAND_TIGHT = /(^|[\s+\/(])(다|이|현|신)\s?(10|[3-9])\s*(만원|만)?(?![\d,\-])/;
+  /* 끝났다는 말 — '등록완' '발송 완료' '등완' '등록해드렸습니다' '완' */
+  var GIFT_DONE_WORD = /(등록|발송|지급)\s*(완|했|해|됐|되었|드렸)|등완|완료|(^|[\s,、])완([\s!.~]|$)/;
+  /* 브랜드나 '상품권' 이 같이 적힌 줄에서만 쓰는 느슨한 완료말 — '모이 문자완' '상품권완' */
+  var GIFT_DONE_LOOSE = /완\s*$|완료|등완|(등록|발송|지급)\s*(완|했|해|됐|되었|드렸)/;
+  /* 상품권 말고 따로 등록하는 것들 — 이 말만 있는 줄의 '등록 완' 은 상품권이 아니다 */
+  var GIFT_OTHER_TOPIC = /청구|복지|자동이체|이메일|메일|계좌|은행|카드|팸|패밀리|자회선|결합|이미징|주소|와이파이|일정|해피콜|셋탑|지니/;
+  /* 아직 안 된 것 — '등록 부탁', '인증 요청', 부재·거절·미등록 …
+     '요청하여 모이7 등완' 처럼 고객이 요청해서 처리한 건과 구분하려고
+     '요청' 은 단독이 아니라 '등록/인증 + 요청', '요청드립니다' 형태만 본다. */
+  var GIFT_NOT_YET = /(등록|발송|지급|인증|진행)[^\n]{0,6}(부탁|요청|해\s*주|주세요|바랍)|요청\s*드립|안내[^\n]{0,4}부탁|부재|ㅂㅈ|거절|미등록|미지급|미수령|안왔|반송|취소|예정|추후|확인\s*중|되어\s*있지\s*않|없어|없음|진행\s*중|진행하겠|진행한다|됩니다/;
 
+  /* { hit, pre } — pre 는 '10현대' 처럼 금액이 브랜드 앞에 온 형태 */
   function giftAmount(seg, brandRe) {
     var m = brandRe.exec(seg);
     if (!m) return null;
     var a = GIFT_AMOUNT.exec(seg.slice(m.index + m[0].length));
-    return a ? m[0] + a[1] : null;
+    if (a) return { hit: m[0] + a[1], pre: false };
+    var p = GIFT_AMOUNT_PRE.exec(seg.slice(0, m.index));
+    return p ? { hit: p[2] + m[0], pre: true } : null;
   }
 
   /* 한 메모에 '농협지류상품권 4만원 요청 / 농지4등록완료' 처럼
-     요청과 등록이 같이 적히므로 '/' 와 줄바꿈으로 잘라 조각별로 본다. */
-  function giftDoneMemo(content) {
-    var segs = String(content).split(/[\/\n]/);
+     아직인 것과 끝난 것이 같이 적히므로 '/' · '>>' · 줄바꿈으로 잘라 조각별로 본다. */
+  function giftDoneMemo(content, giftTopic) {
+    var segs = String(content).split(/[\/\n]|>>/);
     for (var i = 0; i < segs.length; i++) {
       var seg = segs[i].trim();
       if (!seg || GIFT_NOT_YET.test(seg)) continue;
-      var hit = giftAmount(seg, GIFT_BRAND_CODE);
-      if (!hit && GIFT_CTX.test(seg)) hit = giftAmount(seg, GIFT_BRAND_WORD);
-      if (!hit && seg.length <= 12 && GIFT_BRAND_TIGHT.test(seg)) hit = seg;
-      if (!hit && GIFT_DONE.test(seg)) hit = seg;
+
+      var hit = giftAmount(seg, GIFT_BRAND_CODE);                        // ①②
+      if (!hit) {
+        /* '현대'·'롯데' 같은 낱말은 주소에도 나와서, 뒤에 금액이 붙는 형태는
+           상품권 얘기(등록·발송·완)가 같은 줄에 있을 때만 인정한다.
+           '10현대' 처럼 금액이 앞에 오는 형태는 그대로 인정한다. */
+        var w = giftAmount(seg, GIFT_BRAND_WORD);
+        if (w && (w.pre || GIFT_CTX.test(seg))) hit = w;
+      }
+      if (!hit && seg.length <= 12 && GIFT_BRAND_TIGHT.test(seg)) hit = { hit: seg };
+
+      if (!hit) {                                                        // ③④
+        var mine = /상품권/.test(seg) || !GIFT_OTHER_TOPIC.test(seg);
+        var named = GIFT_BRAND_CODE.test(seg) || GIFT_BRAND_WORD.test(seg) || /상품권/.test(seg);
+        if (mine && ((named && GIFT_DONE_LOOSE.test(seg)) ||
+                     (giftTopic && GIFT_DONE_WORD.test(seg)))) hit = { hit: seg };
+      }
       if (hit) return seg;
     }
     return null;
@@ -350,6 +375,8 @@
   /* 가장 최근 상품권 신호. { state:'예정'|'등록', ts, note } 또는 null */
   function giftStatus(history) {
     var latest = null;
+    /* '발송완' 한 마디만 남기는 경우가 있어서, 이력에 상품권 얘기가 오갔는지 본다. */
+    var giftTopic = /상품권/.test(String(history || ''));
     historyEntries(history).forEach(function (e) {
       var sig = null;
       var f = GIFT_FIELD.exec(e.content);
@@ -358,12 +385,12 @@
         var pending = !v || GIFT_PENDING.test(v.replace(/\s/g, ''));
         /* 같은 메모 안에서 'ㅇ상품권 : 예정' 아래 'ㅇ기타 : … 상품권 발송완' 처럼
            다른 줄에 등록·발송 사실을 적어 두는 경우가 있다. 그 줄이 우선이다. */
-        var other = pending ? giftDoneMemo(e.content.replace(f[0], '')) : null;
+        var other = pending ? giftDoneMemo(e.content.replace(f[0], ''), giftTopic) : null;
         sig = other
           ? { state: '등록', note: '상품권 등록 메모 "' + other.slice(0, 40) + '"' }
           : { state: pending ? '예정' : '등록', note: '상품권: ' + (v || '(빈값)') };
       } else {
-        var done = giftDoneMemo(e.content);
+        var done = giftDoneMemo(e.content, giftTopic);
         if (done) sig = { state: '등록', note: '상품권 등록 메모 "' + done.slice(0, 40) + '"' };
       }
       if (sig && (!latest || e.ts > latest.ts)) { sig.ts = e.ts; latest = sig; }
