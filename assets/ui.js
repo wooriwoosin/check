@@ -4,7 +4,7 @@
   var K = window.KtCheck, R = window.Rules, E = window.Exporter, $ = K.$;
   var S = K.STATE, TABS = [], active = 0;
 
-  $('#ver').textContent = window.APP_VERSION || '';
+  if ($('#ver')) $('#ver').textContent = window.APP_VERSION || '';
 
   var drop = $('#drop'), file = $('#file'), err = $('#err');
   drop.addEventListener('click', function () { file.click(); });
