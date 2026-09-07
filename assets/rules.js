@@ -125,7 +125,9 @@
   var OTHER_CARRIER_BUNDLE = [
     '요즘가족결합', '요즘 가족 결합', '요가결',
     '요즘우리집결합', '요즘 우리집 결합', '우리집결합',              // SKT
-    '참쉬운결합', '참쉬운 결합', '참쉬운가족결합', '가족무한사랑',   // LG U+
+    '요우결',
+    '참쉬운결합', '참쉬운 결합', '참쉬운가족결합', '참쉬가', '참쉬결',
+    '가족무한사랑',                                                // LG U+
     '투게더'];
   var WIRELESS_BUNDLE = ['프리미엄싱글', '프리미엄 싱글', '프싱',
     '프리미엄가족결합', '프리미엄가족', '프가결',
@@ -137,11 +139,13 @@
   var NOT_OURS = ['직접결합', '결합직접', '본사통한결합', '본사통해', '본사를통해', '본사결합',
     '미결합', '미결', '결합안함', '결합X', '결합없이'];
   /* 홈결합(인터넷+TV 기본결합)은 접수 시 기본으로 들어가는 것이라 검수 대상이 아니다. */
-  var HOME_BUNDLE = /^[ㅇoO0*\s]*(인티)?홈\s*결?(합)?\s*(TM)?\s*(등록)?\s*$/;
+  /* 홈결합 = 인터넷+TV 기본결합. '인티'(인터넷+티비) 한 마디만 적기도 한다. */
+  var HOME_BUNDLE = /^[ㅇoO0*\s]*(인\s*[+티]\s*티?|인터넷\s*\+?\s*T?V?)?\s*홈?\s*결?\s*합?\s*(TM)?\s*(등록)?\s*$/;
   /* 결합란에 적혀 있어도 결합 내용이 아닌 값 — 요금 안내·약정·상품권 안내문 */
   var NOT_BUNDLE_VALUE = [
     /^[\s\d,.\-원>+]*$/,          // 금액·기호만
-    /쿠폰\s*적용/, /위약금/, /^약정/, /상품권/
+    /쿠폰\s*적용/, /위약금/, /^약정/, /상품권/,
+    /100\s*번/                    // '설치후 100번안내' — 고객이 직접 건다
   ];
   /* 결합란 안에서만 인정하는 결합 이름 — 본문 전체에서 찾으면 요금 '총액' 등과 섞인다. */
   var FIELD_BUNDLE = [
@@ -153,6 +157,9 @@
   ];
 
   function ignorableValue(v) {
+    // 결합 이름이 같이 적혀 있으면(예: '정액결합 (개통후 100번 안내)') 버리지 않는다
+    if (has(v, WIRELESS_BUNDLE)) return null;
+    for (var f = 0; f < FIELD_BUNDLE.length; f++) if (FIELD_BUNDLE[f].re.test(v.replace(/\s/g, ''))) return null;
     if (HOME_BUNDLE.test(v)) return '홈결합(기본결합)';
     for (var i = 0; i < NOT_BUNDLE_VALUE.length; i++) {
       if (NOT_BUNDLE_VALUE[i].test(v)) return '결합 내용 아님';
@@ -257,9 +264,11 @@
     return '불명';
   }
 
+  /* '참.쉬.가' 처럼 점을 찍어 줄여 쓰는 경우가 있어 공백과 함께 지우고 맞춰본다. */
   function has(hay, list) {
-    var flat = hay.replace(/\s/g, '');
-    for (var i = 0; i < list.length; i++) if (flat.indexOf(list[i].replace(/\s/g, '')) >= 0) return list[i];
+    var strip = function (v) { return String(v).replace(/[\s.·ㆍ]/g, ''); };
+    var flat = strip(hay);
+    for (var i = 0; i < list.length; i++) if (flat.indexOf(strip(list[i])) >= 0) return list[i];
     return null;
   }
 
@@ -396,6 +405,26 @@
       if (sig && (!latest || e.ts > latest.ts)) { sig.ts = e.ts; latest = sig; }
     });
     return latest;
+  }
+
+  /* 이름·속성에 '쿠폰' 이 적힌 건은 무선단말 할인쿠폰 대상이라
+     가입.번호에 서비스번호·전화번호 말고 '서비스계약번호'(11자리)가 더 있어야 한다.
+       예) z!63252443327 / 031-123-1234 / 63252443327
+     숫자 사이 하이픈은 끊어서 세므로 전화번호는 11자리로 잡히지 않는다. */
+  function hasCouponTag(row) {
+    return /쿠폰/.test(attrTokens(row).join(' '));
+  }
+
+  function contractNo(raw) {
+    var all = String(raw || '').match(/\d+/g) || [];
+    var svc = serviceNo(raw);
+    var left = [], used = false;
+    all.forEach(function (t) {
+      if (t.length !== 11) return;
+      if (!used && t === svc) { used = true; return; }   // 서비스번호 한 번은 빼고 센다
+      left.push(t);
+    });
+    return left.length ? left[0] : '';
   }
 
   function hasGiftMemo(row) { return GIFT_STAR.test(row['가입.번호'] || ''); }
@@ -558,6 +587,7 @@
     nameTags: nameTags, attrTokens: attrTokens, dongpanTag: dongpanTag,
     giftStatus: giftStatus, hasGiftMemo: hasGiftMemo, historyEntries: historyEntries,
     checkServiceNo: checkServiceNo, isActive: isActive, ACTIVE_STATUS: ACTIVE_STATUS,
+    hasCouponTag: hasCouponTag, contractNo: contractNo,
     isKtAuth: isKtAuth
   };
 })(window);

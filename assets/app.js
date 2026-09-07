@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var R = window.Rules, X = window.XlsxWriter, T = window.KosTemplates;
-  var STATE = { rows: [], keep: [], drop: [], checks: null, fileName: '', history: null,
+  var STATE = { rows: [], keep: [], drop: [], header: [], checks: null, fileName: '', history: null,
               hasSangbu: true, historyOnly: false };
   var $ = function (s) { return document.querySelector(s); };
 
@@ -75,7 +75,7 @@
     var mk = R.mobileKtCustomers(all);
     // 해피콜 목록에는 접점코드가 없다 → 상부점 검수는 건너뛴다
     var hasSangbu = keep.length > 0 && keep[0]['접점코드'] !== undefined;
-    var findings = { bundle: [], dueDate: [], sangbu: [], seller: [], ossList: [], product: [], subNo: [], gift: [], giftKt: [] };
+    var findings = { bundle: [], dueDate: [], sangbu: [], seller: [], ossList: [], product: [], subNo: [], gift: [], giftKt: [], coupon: [] };
 
     /* OSS(원스톱전환)는 신규 검수 항목.
        웹의 원스톱해지 라인과 KOS 원스톱 로우데이터의 수량이 맞아야 한다. */
@@ -125,8 +125,9 @@
       }
       if (r._bundle.verdict !== '해당없음') findings.bundle.push(r);
 
+      // 취소·보류 건은 개통기한을 볼 이유가 없다
       var s = parseDate(r['접수일']), p = parseDate(r['개통기한']);
-      if (s && p) {
+      if (s && p && R.isActive(r)) {
         var exp = eomNextMonth(s);
         if (ymd(p) !== ymd(exp)) {
           r._dueDate = '개통기한 ' + ymd(p) + ' ≠ 익월말일 ' + ymd(exp);
@@ -140,7 +141,7 @@
          '접점코드별 통상 상부점' 을 데이터에서 학습하면 오탐이 난다.
          (예: 접점코드가 (KT)도매 인데 상부점이 유선기타인 정상 건)
          그래서 확실한 대응만 본다. */
-      if (hasSangbu) {
+      if (hasSangbu && R.isActive(r)) {          // 취소·보류 건은 넘어간다
         var k = r['접점코드'] || '';
         var sb = r['상부점'] || '';
         var etcProduct = /^유선기타/.test(r['상품명'] || '');
@@ -196,6 +197,22 @@
 
        메모는 보통 '인터넷' 라인에 남기므로 고객당 한 곳만 있으면 통과다.
        ★ 표기는 이관 제외된 라인(모바일 등)까지 포함해 전체 행에서 확인한다. */
+    /* 쿠폰(무선단말 할인쿠폰) 건은 가입.번호에 서비스번호·전화번호 말고
+       서비스계약번호(11자리)가 더 있어야 한다. 없으면 담당자가 찾아서 적어야 한다.
+       메모는 보통 인터넷 라인 한 곳에만 적으므로 상품권처럼 고객 단위로 본다. */
+    var couponCust = {}, couponHas = {};
+    keep.forEach(function (r) {
+      if (!R.isActive(r) || !R.hasCouponTag(r)) return;
+      var ck = R.customerKey(r);
+      if (!couponCust[ck]) couponCust[ck] = r;
+      var c = R.contractNo(r['가입.번호']);
+      if (c) couponHas[ck] = c;
+    });
+    Object.keys(couponCust).forEach(function (ck) {
+      if (couponHas[ck]) return;
+      findings.coupon.push(couponCust[ck]);
+    });
+
     if (historyByCust) {
       var starByCust = {}, linesByCust = {}, giftByCust = {};
       all.forEach(function (r) {

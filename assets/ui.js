@@ -54,6 +54,7 @@
     fr.onload = function () {
       K.parseWebRaw(fr.result).then(function (parsed) {
         S.rows = parsed.rows;
+        S.header = parsed.header;
         S.fileName = f.name;
         S.hasSangbu = parsed.header.indexOf('접점코드') >= 0;
         S.hasHistory = parsed.header.indexOf('고객이력') >= 0;
@@ -157,6 +158,14 @@
           ['개통상태', '개통상태'], ['사유', '_subNo', 'wrap']]
       },
       {
+        key: 'cp', label: '쿠폰 서비스계약번호', rows: c.coupon, tone: 'c',
+        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['생년월일', birth],
+          ['개통상태', '개통상태'], ['상품명', '상품명'],
+          ['속성', function (r) { return R.attrTokens(r).join(' / '); }],
+          ['가입.번호', '가입.번호', 'wrap'],
+          ['확인할 것', function () { return '서비스계약번호(11자리)를 가입.번호에 추가로 기재'; }, 'wrap']]
+      },
+      {
         key: 'giftkt', label: 'KT 상품권 미등록', rows: c.giftKt, tone: 't',
         cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['생년월일', birth],
           ['인증', '고객인증(값)'], ['최근 상품권 이력', '_giftNote', 'wrap'],
@@ -204,6 +213,7 @@
       warn.classList.remove('hidden');
     } else warn.classList.add('hidden');
     $('#dl').disabled = S.historyOnly;
+    $('#dlw').disabled = S.historyOnly;
     $('#dlx').disabled = S.historyOnly;
     $('#cards').innerHTML = [
       card(S.rows.length, '전체 행', ''),
@@ -266,6 +276,13 @@
     var d = new Date(), p = function (n) { return ('0' + n).slice(-2); };
     return String(d.getFullYear()).slice(2) + p(d.getMonth() + 1) + p(d.getDate()) + p(d.getHours()) + p(d.getMinutes());
   }
+
+  /* 기존 매크로에 그대로 넣어 쓰는 파일 — 웹 로우데이터에서 이관 대상만 남긴 것 */
+  $('#dlw').addEventListener('click', function () {
+    E.buildWeb(S.header, S.keep).then(function (blob) {
+      save(blob, 'KT검수_웹로우데이터_' + stamp() + '.xlsx');
+    });
+  });
 
   $('#dl').addEventListener('click', function () {
     var c = S.checks;

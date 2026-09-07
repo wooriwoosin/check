@@ -54,11 +54,15 @@
     <div class="panel">
       <h2>4. KT전산으로 넘길 파일 만들기</h2>
       <p class="sub">
-        이관 제외 건은 빠지고, 통과한 건만 <code>웹</code> 시트에 들어갑니다.
-        <code>접수</code>·<code>결합</code>·<code>원스톱</code> 시트에 KOS 데이터를 붙여넣으면 2차 검수가 자동으로 계산됩니다.
+        <b>웹 로우데이터</b> — 올린 파일 그대로에서 이관 대상이 아닌 행(업셀링·전환, 약정갱신,
+        추가지급, 정산관련, 대성 상권사업부)만 뺀 것입니다. <b>열은 하나도 더하거나 빼지 않아서
+        기존 결합접수_검수 매크로에 그대로 넣어 쓸 수 있습니다.</b><br>
+        <b>KT전산 2차검수 파일</b> — 위 내용에 검수용 열과 수식을 더한 것입니다.
+        <code>접수</code>·<code>결합</code>·<code>원스톱</code> 시트에 KOS 데이터를 붙여넣으면 2차 검수가 자동 계산됩니다.
       </p>
       <div class="row">
-        <button class="go" id="dl">이관 파일 다운로드 (.xlsx)</button>
+        <button class="go" id="dlw">웹 로우데이터 다운로드 (.xlsx)</button>
+        <button class="go ghost" id="dl">KT전산 2차검수 파일 (.xlsx)</button>
         <button class="go ghost" id="dlx">이관 제외 목록 다운로드</button>
       </div>
       <div class="note">

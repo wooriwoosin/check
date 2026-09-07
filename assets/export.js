@@ -309,5 +309,20 @@
     }]);
   }
 
-  window.Exporter = { build: build, buildExcluded: buildExcluded, WEB_COLS: WEB_COLS };
+  /* 웹 로우데이터 그대로 — 열을 하나도 더하거나 빼지 않고,
+     이관 대상이 아닌 행(업셀링·약정갱신·추가지급·정산·대성 등)만 뺀다.
+     기존 결합접수_검수 매크로에 그대로 붙여 쓸 수 있게 하려는 것이다. */
+  function buildWeb(header, keep) {
+    var cols = (header && header.length) ? header.slice() : Object.keys(keep[0] || {});
+    var rows = [cols];
+    keep.forEach(function (r) {
+      rows.push(cols.map(function (c) { return r[c] == null ? '' : r[c]; }));
+    });
+    return X.build([{
+      name: '고객목록', rows: rows, headerRows: 1,
+      cols: cols.map(function (c) { return Math.min(Math.max(String(c).length * 2 + 4, 8), 24); })
+    }]);
+  }
+
+  window.Exporter = { build: build, buildExcluded: buildExcluded, buildWeb: buildWeb, WEB_COLS: WEB_COLS };
 })();
