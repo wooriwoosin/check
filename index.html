@@ -3,18 +3,33 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>KT 검수 — 1차 웹 검수</title>
+<title>[KT 결합접수 검수]</title>
+<meta name="description" content="웹 로우데이터로 1차 검수하고 KT전산으로 넘길 파일을 만듭니다">
+<link rel="icon" href="assets/wavenet-logo.svg">
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
-<header>
-  <h1>KT 검수 — 1차 웹 검수</h1>
-  <p>웹 로우데이터로 먼저 걸러내고, KT전산으로 넘길 파일을 만듭니다. 파일은 브라우저 안에서만 처리되며 어디로도 전송되지 않습니다.</p>
+<div class="watermark" aria-hidden="true"></div>
+
+<header class="top">
+  <div class="top-inner">
+    <div class="brandrow">
+      <img src="assets/wavenet-logo.svg" alt="WAVENET">
+      <span class="div"></span>
+      <span class="tag">KT 유선 접수 검수</span>
+      <span class="ver" id="ver"></span>
+    </div>
+    <h1><span class="br">[</span>KT 결합접수 검수<span class="br">]</span></h1>
+    <p class="lead">
+      웹 로우데이터로 먼저 걸러내고, KT전산으로 넘길 파일을 만듭니다.
+      파일은 브라우저 안에서만 처리되며 어디로도 전송되지 않습니다.
+    </p>
+  </div>
 </header>
 
 <main>
   <section class="panel">
-    <h2>1. 웹 로우데이터 올리기</h2>
+    <h2><span class="num">1</span>웹 로우데이터 올리기</h2>
     <p class="sub">우리 어드민에서 받은 <code>전체고객상품리스트_YYYYMMDD_HHMM.xlsx</code> 파일 (예전 <code>.xls</code> 도 됩니다)</p>
     <div id="drop" tabindex="0" role="button">
       <strong>파일을 끌어다 놓거나 클릭해서 선택</strong>
@@ -24,7 +39,7 @@
     <div id="err" class="note err hidden"></div>
 
     <div id="step2" class="hidden">
-    <h2 style="margin-top:22px">해피콜 목록 올리기</h2>
+    <h2 style="margin-top:22px"><span class="num">+</span>해피콜 목록 올리기</h2>
     <p class="sub" id="step2note"></p>
     <div id="drop2" tabindex="0" role="button">
       <strong>해피콜 목록을 끌어다 놓거나 클릭</strong>
@@ -38,21 +53,21 @@
 
   <section id="result" class="hidden">
     <div class="panel">
-      <h2>2. 검수 결과</h2>
+      <h2><span class="num">2</span>검수 결과</h2>
       <p class="sub" id="fileinfo"></p>
       <div id="modewarn" class="note hidden"></div>
       <div class="cards" id="cards"></div>
     </div>
 
     <div class="panel">
-      <h2>3. 확인할 항목</h2>
+      <h2><span class="num">3</span>확인할 항목</h2>
       <p class="sub">탭을 눌러 항목별로 봅니다.</p>
       <div class="tabs" id="tabs"></div>
       <div id="tablearea"></div>
     </div>
 
     <div class="panel">
-      <h2>4. KT전산으로 넘길 파일 만들기</h2>
+      <h2><span class="num">4</span>KT전산으로 넘길 파일 만들기</h2>
       <p class="sub">
         <b>웹 로우데이터</b> — 올린 파일 그대로에서 이관 대상이 아닌 행(업셀링·전환, 약정갱신,
         추가지급, 정산관련, 대성 상권사업부)만 뺀 것입니다. <b>열은 하나도 더하거나 빼지 않아서
@@ -73,6 +88,12 @@
   </section>
 </main>
 
+<footer class="foot">
+  <span>파일은 브라우저 안에서만 처리됩니다. 서버로 올라가지 않습니다.</span>
+  <span><img src="assets/wavenet-logo.svg" alt="WAVENET"></span>
+</footer>
+
+<script src="assets/version.js"></script>
 <script src="assets/xlsx.js"></script>
 <script src="assets/xlsxread.js"></script>
 <script src="assets/kos-templates.js"></script>

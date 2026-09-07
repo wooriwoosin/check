@@ -244,7 +244,8 @@
       ['', '1차 오류', stats.webError + '건'],
       [],
       ['', '생성일시', stats.now],
-      ['', '원본 파일', stats.fileName]
+      ['', '원본 파일', stats.fileName],
+      ['', '검수앱 버전', window.APP_VERSION || '']
     ];
     // 자리표시자를 실제 행 번호를 쓴 수식으로 교체
     var pasteRow = 0, matchRow = 0;

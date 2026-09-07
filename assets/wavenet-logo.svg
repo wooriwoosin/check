@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 130" role="img" aria-label="WAVENET">
+  <title>WAVENET</title>
+  <g fill="none" stroke-linecap="butt" stroke-linejoin="miter">
+    <path d="M22 14 L80 116 L138 14" stroke="#0E3A63" stroke-width="34"/>
+    <path d="M172 14 L116 116" stroke="#35A8E0" stroke-width="30"/>
+  </g>
+  <text x="150" y="116"
+        font-family="'Archivo Black','Arial Black','Helvetica Neue',Helvetica,Arial,sans-serif"
+        font-size="118" font-weight="900" letter-spacing="-2" fill="#16181D">AVENET</text>
+</svg>

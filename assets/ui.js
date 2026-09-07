@@ -4,6 +4,8 @@
   var K = window.KtCheck, R = window.Rules, E = window.Exporter, $ = K.$;
   var S = K.STATE, TABS = [], active = 0;
 
+  $('#ver').textContent = window.APP_VERSION || '';
+
   var drop = $('#drop'), file = $('#file'), err = $('#err');
   drop.addEventListener('click', function () { file.click(); });
   drop.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') file.click(); });
