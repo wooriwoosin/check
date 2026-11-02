@@ -538,6 +538,47 @@
     return /KT/i.test(v);
   }
 
+  // ══ W-11. 임의메일 청구서 ═══════════════════════════════════════════
+  /* 이메일이 비어 있으면 청구서를 임의 메일로 걸어 둔다(서식지 'ㅇ청구매체+납부방법 : 임의메일 / 계좌').
+     그럴 땐 판매점에 꼭 알려야 한다 — 고객메모·회신요청에
+       '이메일누락 임의메일진행 / 개통후 고객센터로 청구서 변경요청해주세요'
+     같은 말이 하나도 없으면 '전달 누락' 이다.
+     휴대폰이 KT 면 모바일청구서(MMS)로 받을 수 있어서 임의메일 자체가 잘못이다. */
+  var BILL_FIELD = /^[ㅇoO0*●■□·\-\s]*청구\s*매체[^:：\n]*[:：]\s*(.*)$/m;
+  var BILL_ARBITRARY = /임의\s*(이\s*)?(메일|멜)|임시\s*(이\s*)?(메일|멜)/;
+  /* 서식지 밖 메모에서 '임의메일로 진행했다' 는 말 */
+  var BILL_ARBITRARY_DONE = /(임의|임시)\s*(이\s*)?(메일|멜)[^\n]{0,10}(진행|등록|접수)/;
+  /* 판매점에 알린 흔적 — 임의·임시메일이나 이메일 누락·오류를 말한 메모 하나면 된다 */
+  var BILL_NOTICE = /(임의|임시)\s*(이\s*)?(메일|멜)|(이\s*)?메일\s*(주소\s*)?(누락|오류|없|미기재|공란)/;
+
+  /* null 또는 { reason, value, ts, author } */
+  function billingCheck(row, history) {
+    var latest = null, notice = null;
+    historyEntries(history).forEach(function (e) {
+      var f = BILL_FIELD.exec(e.content);
+      var sig = null;
+      if (f) {
+        sig = { arbitrary: BILL_ARBITRARY.test(f[1]), value: f[1].trim() };
+        // 서식지도 고객메모라 'ㅇ기타 : 이메일누락 임의메일진행 …' 처럼 같이 적어 두면 안내한 것이다
+        if (!notice && BILL_NOTICE.test(e.content.replace(f[0], ''))) notice = e;
+      } else {
+        if (!notice && BILL_NOTICE.test(e.content)) notice = e;
+        if (BILL_ARBITRARY_DONE.test(e.content)) sig = { arbitrary: true, value: e.content.replace(/\s+/g, ' ').slice(0, 50) };
+      }
+      // 서식지를 다시 남겼거나 나중에 바꿨으면 가장 최근 것이 맞다
+      if (sig && (!latest || e.ts >= latest.ts)) { sig.ts = e.ts; sig.author = e.author; latest = sig; }
+    });
+    if (!latest || !latest.arbitrary) return null;
+    var out = { value: latest.value, ts: latest.ts, author: latest.author };
+    if (isKtAuth(row)) {
+      out.reason = 'KT 휴대폰인데 임의메일 진행 — 모바일청구서(MMS) 가능';
+      return out;
+    }
+    if (notice) return null;
+    out.reason = '임의메일 진행 전달 누락 — 고객메모·회신요청에 안내 없음';
+    return out;
+  }
+
   function mobileKtCustomers(rows) {
     var set = {};
     rows.forEach(function (r) { if (r['상품명'] === '모바일_KT') set[customerKey(r)] = true; });
@@ -648,6 +689,7 @@
     checkServiceNo: checkServiceNo, isActive: isActive, ACTIVE_STATUS: ACTIVE_STATUS,
     hasCouponTag: hasCouponTag, contractNo: contractNo, giftEligible: giftEligible,
     GIFT_POLICY: GIFT_POLICY, giftCodeIn: giftCodeIn, giftFieldLatest: giftFieldLatest,
+    billingCheck: billingCheck,
     isKtAuth: isKtAuth
   };
 })(window);

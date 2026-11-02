@@ -75,7 +75,7 @@
     var mk = R.mobileKtCustomers(all);
     // 해피콜 목록에는 접점코드가 없다 → 상부점 검수는 건너뛴다
     var hasSangbu = keep.length > 0 && keep[0]['접점코드'] !== undefined;
-    var findings = { bundle: [], dueDate: [], sangbu: [], seller: [], ossList: [], product: [], subNo: [], gift: [], giftKt: [], coupon: [], giftBan: [] };
+    var findings = { bundle: [], dueDate: [], sangbu: [], seller: [], ossList: [], product: [], subNo: [], gift: [], giftKt: [], coupon: [], giftBan: [], billing: [] };
 
     /* OSS(원스톱전환)는 신규 검수 항목.
        웹의 원스톱해지 라인과 KOS 원스톱 로우데이터의 수량이 맞아야 한다. */
@@ -212,6 +212,24 @@
       if (couponHas[ck]) return;
       findings.coupon.push(couponCust[ck]);
     });
+
+    /* 임의메일 청구서 — 판매점에 알렸는지, KT 휴대폰인데 임의메일로 했는지.
+       고객 단위로 한 번만 보고, 취소·보류 건은 넘어간다. */
+    if (historyByCust) {
+      var billSeen = {};
+      keep.forEach(function (r) {
+        if (!R.isActive(r)) return;
+        var ck = R.customerKey(r);
+        if (billSeen[ck]) return;
+        billSeen[ck] = true;
+        var b = R.billingCheck(r, historyByCust[ck]);
+        if (!b) return;
+        r._billReason = b.reason;
+        r._billValue = b.value;
+        r._billWho = b.ts + '  ' + (b.author || '');
+        findings.billing.push(r);
+      });
+    }
 
     /* 상품권 등록 폐지 이후 접수분 — 서식지 'ㅇ상품권 :' 에 상품권이 적혀 있으면 문제다.
        고객 단위로 한 번만 보고, 취소·보류 건은 넘어간다. */

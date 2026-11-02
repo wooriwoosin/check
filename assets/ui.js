@@ -168,6 +168,13 @@
           ['확인할 것', function () { return '서비스계약번호(11자리)를 가입.번호에 추가로 기재'; }, 'wrap']]
       },
       {
+        key: 'bill', label: '임의메일진행 전달누락', rows: c.billing, tone: 'c',
+        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['생년월일', birth],
+          ['개통상태', '개통상태'], ['인증', '고객인증(값)'], ['이메일', '이메일'],
+          ['ㅇ청구매체 값', '_billValue', 'wrap'], ['적은 시각·작성자', '_billWho'],
+          ['사유', '_billReason', 'wrap']]
+      },
+      {
         key: 'giftban', label: '상품권 기재 (' + R.GIFT_POLICY.abolishedFrom.slice(5).split('-').map(Number).join('/') + ' 접수~)',
         rows: c.giftBan, tone: 't',
         cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['생년월일', birth],
@@ -203,7 +210,8 @@
 
   /* 1차 검수 지적 수 — 확인불필요 탭은 빼고 센다 */
   function webErrorCount(c) {
-    var n = c.dueDate.length + c.sangbu.length + c.seller.length + c.product.length + c.subNo.length + c.giftBan.length;
+    var n = c.dueDate.length + c.sangbu.length + c.seller.length + c.product.length + c.subNo.length +
+            c.giftBan.length + c.billing.length;
     if (R.GIFT_POLICY.legacyChecks) n += c.gift.length + c.giftKt.length;
     return n;
   }
