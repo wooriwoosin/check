@@ -57,6 +57,10 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px; }
   background: rgba(0,0,0,.08); font-size: 11px;
 }
 .tab[aria-selected="true"] .b { background: rgba(255,255,255,.25); }
+/* 확인불필요 탭 — 지금은 안 봐도 되는 탭 */
+.tab.off { border-style: dashed; color: #a0a6ae; background: #f6f7f9; }
+.tab.off[aria-selected="true"] { background: #9aa1aa; border-color: #9aa1aa; border-style: solid; color: #fff; }
+.note.off { background: #f2f4f7; border-color: #9aa1aa; margin: 0 0 12px; }
 
 .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
 table { border-collapse: collapse; width: 100%; font-size: 13px; }

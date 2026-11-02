@@ -423,6 +423,43 @@
     return latest;
   }
 
+  /* ── 상품권 등록 폐지 (2026-11-01 접수분부터) ──────────────────────
+     이 날 접수분부터 상품권 등록 업무 자체가 없어졌다. 그래서
+       · 'KT 상품권 미등록' · '상품권 메모누락' 은 확인불필요로 돌리고
+       · 반대로 서식지 'ㅇ상품권 :' 에 모농6·모이3 같은 상품권이 적혀 있으면 문제다.
+         X · 등록불가 · 미등록 · 예정 · 빈칸은 괜찮다.
+     업무가 다시 생기면 legacyChecks 를 true 로 바꾸면 예전 두 탭이 다시 지적으로 잡힌다. */
+  var GIFT_POLICY = {
+    abolishedFrom: '2026-11-01',
+    legacyChecks: false
+  };
+
+  /* 글 안에 상품권 종류+금액이 적혀 있으면 그 부분을 돌려준다. 없으면 null.
+     'X' '등록불가' '미등록' '예정' 같은 값은 금액이 없어서 걸리지 않는다. */
+  function giftCodeIn(text) {
+    var segs = String(text || '').split(/[\/\n,>→]/);
+    for (var i = 0; i < segs.length; i++) {
+      var seg = segs[i].trim();
+      if (!seg) continue;
+      var a = giftAmount(seg, GIFT_BRAND_CODE) || giftAmount(seg, GIFT_BRAND_WORD);
+      if (a) return a.hit;
+      if (seg.length <= 12 && GIFT_BRAND_TIGHT.test(seg)) return seg;
+      if (GIFT_AMOUNT_WON.test(seg) && (GIFT_BRAND_CODE.test(seg) || GIFT_BRAND_WORD.test(seg))) return seg;
+    }
+    return null;
+  }
+
+  /* 서식지 'ㅇ상품권 :' 값 중 가장 최근 것 — { value, ts, author } 또는 null */
+  function giftFieldLatest(history) {
+    var latest = null;
+    historyEntries(history).forEach(function (e) {
+      var f = GIFT_FIELD.exec(e.content);
+      if (!f) return;
+      if (!latest || e.ts > latest.ts) latest = { value: f[1].trim(), ts: e.ts, author: e.author };
+    });
+    return latest;
+  }
+
   /* 이름·속성에 '쿠폰' 이 적힌 건은 무선단말 할인쿠폰 대상이라
      가입.번호에 서비스번호·전화번호 말고 '서비스계약번호'(11자리)가 더 있어야 한다.
        예) z!63252443327 / 031-123-1234 / 63252443327
@@ -610,6 +647,7 @@
     giftStatus: giftStatus, hasGiftMemo: hasGiftMemo, historyEntries: historyEntries,
     checkServiceNo: checkServiceNo, isActive: isActive, ACTIVE_STATUS: ACTIVE_STATUS,
     hasCouponTag: hasCouponTag, contractNo: contractNo, giftEligible: giftEligible,
+    GIFT_POLICY: GIFT_POLICY, giftCodeIn: giftCodeIn, giftFieldLatest: giftFieldLatest,
     isKtAuth: isKtAuth
   };
 })(window);

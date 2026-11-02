@@ -168,13 +168,21 @@
           ['확인할 것', function () { return '서비스계약번호(11자리)를 가입.번호에 추가로 기재'; }, 'wrap']]
       },
       {
-        key: 'giftkt', label: 'KT 상품권 미등록', rows: c.giftKt, tone: 't',
+        key: 'giftban', label: '상품권 기재 (' + R.GIFT_POLICY.abolishedFrom.slice(5).split('-').map(Number).join('/') + ' 접수~)',
+        rows: c.giftBan, tone: 't',
+        cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['생년월일', birth],
+          ['접수일', '접수일'], ['개통상태', '개통상태'],
+          ['ㅇ상품권 값', '_banValue', 'wrap'], ['걸린 부분', '_banCode'],
+          ['적은 시각·작성자', '_banWho'], ['가입 라인', '_banLines', 'wrap']]
+      },
+      {
+        key: 'giftkt', label: 'KT 상품권 미등록', rows: c.giftKt, tone: 't', legacy: true,
         cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['생년월일', birth],
           ['인증', '고객인증(값)'], ['최근 상품권 이력', '_giftNote', 'wrap'],
           ['가입 라인', '_giftLines', 'wrap']]
       },
       {
-        key: 'gift', label: '상품권 메모누락', rows: c.gift, tone: 't',
+        key: 'gift', label: '상품권 메모누락', rows: c.gift, tone: 't', legacy: true,
         cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['생년월일', birth],
           ['인증', '고객인증(값)'], ['최근 상품권 이력', '_giftNote', 'wrap'],
           ['이 고객의 가입 라인 — ★상품권 표기 없음', '_giftLines', 'wrap']]
@@ -186,13 +194,24 @@
           ['상품명', function (d) { return d.row['상품명']; }], ['상품옵션', function (d) { return d.row['상품옵션']; }],
           ['사유', function (d) { return d.reason; }, 'wrap']]
       }
-    ].filter(Boolean);
+    ].filter(Boolean).map(function (t) {
+      /* 상품권 등록 업무가 없어진 동안엔 예전 상품권 탭을 지우지 않고 '확인불필요' 로 둔다 */
+      if (t.legacy && !R.GIFT_POLICY.legacyChecks) { t.off = true; t.label += ' · 확인불필요'; }
+      return t;
+    });
+  }
+
+  /* 1차 검수 지적 수 — 확인불필요 탭은 빼고 센다 */
+  function webErrorCount(c) {
+    var n = c.dueDate.length + c.sangbu.length + c.seller.length + c.product.length + c.subNo.length + c.giftBan.length;
+    if (R.GIFT_POLICY.legacyChecks) n += c.gift.length + c.giftKt.length;
+    return n;
   }
 
   function render() {
     buildTabs();
     var c = S.checks;
-    var webErr = c.dueDate.length + c.sangbu.length + c.seller.length + c.product.length + c.subNo.length + c.gift.length + c.giftKt.length;
+    var webErr = webErrorCount(c);
 
     $('#fileinfo').textContent = S.fileName + ' — 전체 ' + S.rows.length + '행' +
       (S.historyOnly ? '  (해피콜 목록)' : '');
@@ -228,7 +247,7 @@
     ].join('');
 
     $('#tabs').innerHTML = TABS.map(function (t, i) {
-      return '<button class="tab" role="tab" data-i="' + i + '" aria-selected="' + (i === active) + '">' +
+      return '<button class="tab' + (t.off ? ' off' : '') + '" role="tab" data-i="' + i + '" aria-selected="' + (i === active) + '">' +
         t.label + '<span class="b">' + t.rows.length + '</span></button>';
     }).join('');
     Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (b) {
@@ -250,8 +269,12 @@
   }
 
   function drawTable(tab) {
+    var offNote = tab.off
+      ? '<div class="note off">' + R.GIFT_POLICY.abolishedFrom + ' 접수분부터 <b>상품권 등록 업무가 없어져서 지금은 확인하지 않아도 됩니다.</b> ' +
+        '업무가 다시 생길 때를 위해 목록만 남겨 둡니다. 1차 검수 지적 수에도 들어가지 않습니다.</div>'
+      : '';
     if (!tab.rows.length) {
-      $('#tablearea').innerHTML = '<div class="empty">해당 건이 없습니다.</div>';
+      $('#tablearea').innerHTML = offNote + '<div class="empty">해당 건이 없습니다.</div>';
       return;
     }
     var head = '<tr>' + tab.cols.map(function (c) { return '<th>' + esc(c[0]) + '</th>'; }).join('') + '</tr>';
@@ -262,7 +285,7 @@
       }).join('') + '</tr>';
     }).join('');
     var more = tab.rows.length > 500 ? '<div class="empty">앞 500건만 표시했습니다. 전체는 다운로드 파일에서 확인하세요.</div>' : '';
-    $('#tablearea').innerHTML = '<div class="tablewrap"><table><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>' + more;
+    $('#tablearea').innerHTML = offNote + '<div class="tablewrap"><table><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>' + more;
   }
 
   // ── 다운로드 ───────────────────────────────────────────────────────
@@ -292,7 +315,7 @@
       keep: S.keep.length, drop: S.drop.length,
       bundleTarget: byCustomer(bundleRows(c.bundle, '결합대상')).length,
       bundleCheck: byCustomer(bundleRows(c.bundle, '확인필요')).length,
-      webError: c.dueDate.length + c.sangbu.length + c.seller.length + c.product.length + c.subNo.length + c.gift.length + c.giftKt.length,
+      webError: webErrorCount(c),
       ossLines: c.ossList.length, gift: S.history ? c.gift.length : null, giftKt: S.history ? c.giftKt.length : null, now: new Date().toLocaleString('ko-KR'), fileName: S.fileName
     }).then(function (blob) {
       save(blob, 'KT검수_이관_' + stamp() + '.xlsx');

@@ -75,7 +75,7 @@
     var mk = R.mobileKtCustomers(all);
     // 해피콜 목록에는 접점코드가 없다 → 상부점 검수는 건너뛴다
     var hasSangbu = keep.length > 0 && keep[0]['접점코드'] !== undefined;
-    var findings = { bundle: [], dueDate: [], sangbu: [], seller: [], ossList: [], product: [], subNo: [], gift: [], giftKt: [], coupon: [] };
+    var findings = { bundle: [], dueDate: [], sangbu: [], seller: [], ossList: [], product: [], subNo: [], gift: [], giftKt: [], coupon: [], giftBan: [] };
 
     /* OSS(원스톱전환)는 신규 검수 항목.
        웹의 원스톱해지 라인과 KOS 원스톱 로우데이터의 수량이 맞아야 한다. */
@@ -213,6 +213,33 @@
       findings.coupon.push(couponCust[ck]);
     });
 
+    /* 상품권 등록 폐지 이후 접수분 — 서식지 'ㅇ상품권 :' 에 상품권이 적혀 있으면 문제다.
+       고객 단위로 한 번만 보고, 취소·보류 건은 넘어간다. */
+    if (historyByCust) {
+      var banCust = {};
+      keep.forEach(function (r) {
+        if (!R.isActive(r)) return;
+        var d = parseDate(r['접수일']);
+        if (!d || ymd(d) < R.GIFT_POLICY.abolishedFrom) return;
+        var ck = R.customerKey(r);
+        if (banCust[ck]) { banCust[ck].lines.push(r); return; }
+        var f = R.giftFieldLatest(historyByCust[ck]);
+        var code = f && R.giftCodeIn(f.value);
+        if (!code) return;
+        r._banValue = f.value;
+        r._banCode = code;
+        r._banWho = f.ts + '  ' + (f.author || '');
+        r._giftKind = '상품권기재';
+        banCust[ck] = { r: r, lines: [r] };
+        findings.giftBan.push(r);
+      });
+      Object.keys(banCust).forEach(function (ck) {
+        banCust[ck].r._banLines = banCust[ck].lines.map(function (x) {
+          return '· ' + (x['상품명'] || '').replace('KT_', '') + ' / ' + (x['상품옵션'] || '') + '  (' + x._r + '행)';
+        }).join('\n');
+      });
+    }
+
     if (historyByCust) {
       var starByCust = {}, linesByCust = {}, giftByCust = {};
       all.forEach(function (r) {
@@ -221,7 +248,7 @@
       keep.forEach(function (r) {
         var ck = R.customerKey(r);
         var g = R.giftStatus(historyByCust[ck]);
-        r._gift = g ? g.state : '';
+        r._gift = (g && R.GIFT_POLICY.legacyChecks) ? g.state : '';
         // 취소·보류 건과 유선기타(상품권 미지급 상품)는 볼 필요가 없다
         if (!R.isActive(r) || !R.giftEligible(r)) return;
         (linesByCust[ck] = linesByCust[ck] || []).push(r);
@@ -238,11 +265,14 @@
            ★상품권 메모를 남겼든 아니든 '등록예정' 으로 남아 있으면 등록 누락이다.
            인증이 필요한 고객(타사·KT알뜰폰)은 나중에 등록해야 하므로
            ★상품권 메모가 있으면 '언젠가 찾아서 등록할 건' 이라 문제가 아니다. */
+        /* 상품권 등록 업무가 없어진 동안(legacyChecks=false)에는 탭에만 남기고
+           KT전산 파일의 1차 상품권 판정에는 찍지 않는다. */
+        var live = R.GIFT_POLICY.legacyChecks;
         if (R.isKtAuth(r)) {
-          r._giftKind = 'KT미등록';
+          if (live && !r._giftKind) r._giftKind = 'KT미등록';
           findings.giftKt.push(r);
         } else if (!starByCust[ck]) {
-          r._giftKind = '메모누락';
+          if (live && !r._giftKind) r._giftKind = '메모누락';
           findings.gift.push(r);
         }
       });
