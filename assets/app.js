@@ -75,7 +75,7 @@
     var mk = R.mobileKtCustomers(all);
     // 해피콜 목록에는 접점코드가 없다 → 상부점 검수는 건너뛴다
     var hasSangbu = keep.length > 0 && keep[0]['접점코드'] !== undefined;
-    var findings = { bundle: [], dueDate: [], sangbu: [], seller: [], ossList: [], product: [], subNo: [], gift: [], giftKt: [], coupon: [], giftBan: [], billing: [] };
+    var findings = { bundle: [], dueDate: [], sangbu: [], seller: [], ossList: [], product: [], subNo: [], gift: [], giftKt: [], coupon: [], giftBan: [], billing: [], bizClass: [] };
 
     /* OSS(원스톱전환)는 신규 검수 항목.
        웹의 원스톱해지 라인과 KOS 원스톱 로우데이터의 수량이 맞아야 한다. */
@@ -212,6 +212,30 @@
       if (couponHas[ck]) return;
       findings.coupon.push(couponCust[ck]);
     });
+
+    /* 고객구분 — 사업자인데 개인으로, 법인인데 개인사업자로 체크된 건.
+       로우데이터에 '고객구분' 열이 있을 때만. 고객 단위로 한 번만 잡는다.
+       구분은 일찍 고칠수록 좋아서 접수대기·접수중도 본다. 끝난 건(취소·보류·반송·해지)만 뺀다. */
+    if (keep.length && '고객구분' in keep[0]) {
+      var bizSeen = {};
+      keep.forEach(function (r) {
+        if (/취소|보류|반송|해지|철회/.test(r['개통상태'] || '')) return;
+        var ck = R.customerKey(r);
+        if (bizSeen[ck]) { if (bizSeen[ck].r) bizSeen[ck].lines.push(r); return; }
+        var b = R.bizClassCheck(r);
+        bizSeen[ck] = { r: b ? r : null, lines: [r] };
+        if (!b) return;
+        r._bizCur = b.cur;
+        r._bizWant = b.want;
+        r._bizWhy = b.why.join('\n');
+        findings.bizClass.push(r);
+      });
+      findings.bizClass.forEach(function (r) {
+        r._bizLines = bizSeen[R.customerKey(r)].lines.map(function (x) {
+          return '· ' + (x['상품명'] || '').replace('KT_', '') + ' / ' + (x['상품옵션'] || '') + '  (' + x._r + '행)';
+        }).join('\n');
+      });
+    }
 
     /* 임의메일 청구서 — 판매점에 알렸는지, KT 휴대폰인데 임의메일로 했는지.
        고객 단위로 한 번만 보고, 취소·보류 건은 넘어간다. */

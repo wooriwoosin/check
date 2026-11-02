@@ -546,29 +546,107 @@
      휴대폰이 KT 면 모바일청구서(MMS)로 받을 수 있어서 임의메일 자체가 잘못이다. */
   var BILL_FIELD = /^[ㅇoO0*●■□·\-\s]*청구\s*매체[^:：\n]*[:：]\s*(.*)$/m;
   var BILL_ARBITRARY = /임의\s*(이\s*)?(메일|멜)|임시\s*(이\s*)?(메일|멜)/;
+  /* '문자청구(임시메일저장)+계좌' 처럼 문자·모바일·종이 청구에 임시메일만 걸어 둔 건
+     임의메일 진행이 아니다. ('임의메일+지로' 의 지로는 납부방법이라 상관없다) */
+  var BILL_REAL_MEDIUM = /문자|모바일|MMS|종이|우편/i;
+  function billArbitrary(v) {
+    return BILL_ARBITRARY.test(v || '') && !BILL_REAL_MEDIUM.test(v || '');
+  }
   /* 서식지 밖 메모에서 '임의메일로 진행했다' 는 말 */
   var BILL_ARBITRARY_DONE = /(임의|임시)\s*(이\s*)?(메일|멜)[^\n]{0,10}(진행|등록|접수)/;
   /* 판매점에 알린 흔적 — 임의·임시메일이나 이메일 누락·오류를 말한 메모 하나면 된다 */
   var BILL_NOTICE = /(임의|임시)\s*(이\s*)?(메일|멜)|(이\s*)?메일\s*(주소\s*)?(누락|오류|없|미기재|공란)/;
 
-  /* ── 종이청구서 대상 ────────────────────────────────────────────────
-     만65세 이상 · 외국인 · 개인이 아닌 고객(법인·관청·정식단체 등)은 종이청구서를
-     고를 수 있어서, 이메일이 없어도 임의메일이 아니라 종이청구서로 해야 한다.
-     ※ 개인사업자는 원래 대상이 아닌데, 지금 로우데이터로는 법인과 구분이 어려워
-       '개인이 아닌 것' 은 일단 다 잡는다. 로우데이터를 손보면 BUSINESS_NAME 이나
-       paperEligible 의 사업자 판정만 고치면 된다. */
-  var BUSINESS_NAME = /주식회사|\(주\)|㈜|유한회사|\(유\)|합자회사|합명회사|재단|법인|협회|조합|공단|공사$|교회|성당|사찰|학교|어린이집|유치원|시청|구청|군청|도청|주민센터|행정복지센터|관리사무소|입주자대표|단체/;
+  // ══ W-12. 고객구분 (개인 / 개인사업자 / 법인사업자 / 외국인) ══════════════
+  /* 로우데이터 '고객구분' 열이 실제와 맞는지 본다. 개인·외국인 구분은 따지지 않고,
+     사업자인데 개인으로 돼 있거나, 법인인데 법인사업자로 안 돼 있는 것만 본다.
 
-  /* 주민번호 → { birth: Date, foreign: bool } 또는 null
-     7번째 자리: 1·2·5·6 → 1900년대, 3·4·7·8 → 2000년대, 9·0 → 1800년대, 5~8 → 외국인 */
-  function idInfo(v) {
+     법인사업자 근거 (하나라도 있으면 무조건 법인)
+       · 사업자번호 가운데 두 자리 80~89 — 81·86·87·88 영리법인, 82 비영리법인,
+         83 국가·지자체, 84 외국법인, 85 지점, 80·89 고유번호(단체·협회 등)
+       · 법인등록번호 — 주민번호 칸 7번째 자리가 0 (사람 주민번호는 1~8)
+       · 이름에 주식회사·(주)·㈜·유한회사·재단·협회·조합·공단 같은 말
+       · 기타에 '법인사업자' 라고 적혀 있음
+     개인사업자 근거
+       · 사업자번호 가운데 01~79 · 90~99 (열 또는 기타의 사업자번호 줄)
+       · 이름이 상호로 보임 — 푸드·상사·마트·센터·펜션 같은 말, 또는 한글만 5자 이상
+     ※ 대표자 열은 쓰지 않는다. 개인 고객인데 대리점 이름이 들어 있는 경우가 있다. */
+  var CORP_NAME = /주식회사|\(주\)|㈜|유한회사|\(유\)|유한책임회사|합자회사|합명회사|재단|사단법인|법인|협회|조합|공단|공사$|학교|교회|성당|사찰|어린이집|유치원|시청|구청|군청|도청|주민센터|행정복지센터|관리사무소|입주자대표|단체/;
+  var SHOP_NAME = /푸드|상사|상회|마트|마켓|식당|카페|센터|산업|테크|컴퍼니|스튜디오|공방|약국|병원|의원|치과|학원|교습소|미용|헤어|네일|부동산|공인중개|펜션|풀빌라|스테이|모텔|호텔|게스트하우스|기업|건설|물산|무역|유통|디자인|엔터|치킨|피자|베이커리|제과|정육|수산|농장|농원|가구|인테리어|공업|기계|전자|모터스|세탁|솔루션|시스템|그룹|코리아/;
+  var BIZ_NO_HYPHEN = /(\d{3})-(\d{2})-(\d{5})(?!\d)/;
+  var BIZ_NO_LINE = /사업자\s*(등록)?\s*번호[^:：\n]*[:：][ \t]*(\d{10})(?!\d)/;
+
+  function bizNumber(row) {
+    var col = digits(row['사업자번호']);
+    if (col.length === 10) return { no: col, where: '사업자번호 열' };
+    var etc = String(row['기타'] || '');
+    var m = BIZ_NO_HYPHEN.exec(etc);
+    if (m) return { no: m[1] + m[2] + m[3], where: '기타' };
+    m = BIZ_NO_LINE.exec(etc);
+    if (m) return { no: m[2], where: '기타' };
+    return null;
+  }
+
+  function fmtBiz(no) { return no.slice(0, 3) + '-' + no.slice(3, 5) + '-' + no.slice(5); }
+
+  /* { kind: '법인사업자' | '개인사업자' | null, why: [근거…] } */
+  function bizClass(row) {
+    var corp = [], shop = [], short = [];
+    var bn = bizNumber(row);
+    if (bn) {
+      var mid = +bn.no.slice(3, 5);
+      var label = '사업자번호 ' + fmtBiz(bn.no) + ' (' + bn.where + ', 가운데 ' + bn.no.slice(3, 5) + ')';
+      if (mid >= 80 && mid <= 89) { corp.push(label); short.push('사업자번호 가운데 ' + bn.no.slice(3, 5)); }
+      else shop.push(label);
+    }
+    var id = digits(row['주민번호']);
+    if (id.length >= 7 && id.charAt(6) === '0') { corp.push('법인등록번호 ' + id.slice(0, 6) + '-' + id.charAt(6) + '…'); short.push('법인등록번호'); }
+    var name = String(row['고객명'] || '').split('/')[0].trim();
+    var cn = CORP_NAME.exec(name);
+    if (cn) { corp.push("이름에 '" + cn[0] + "'"); short.push("이름 '" + cn[0] + "'"); }
+    if (/법인\s*사업자/.test(String(row['기타'] || ''))) { corp.push("기타에 '법인사업자'"); short.push("기타 '법인사업자'"); }
+    if (!cn) {
+      var sn = SHOP_NAME.exec(name);
+      if (sn) shop.push("이름이 상호로 보임('" + sn[0] + "')");
+      else if (/^[가-힣]{5,}$/.test(name) && row['고객구분'] !== '외국인') shop.push('이름이 상호로 보임(한글 ' + name.length + '자)');
+    }
+    if (corp.length) return { kind: '법인사업자', why: corp.concat(shop), short: short[0] };
+    if (shop.length) return { kind: '개인사업자', why: shop };
+    return { kind: null, why: [] };
+  }
+
+  /* 고객구분이 틀린 경우의 사유. 맞으면 null. */
+  function bizClassCheck(row) {
+    var cur = String(row['고객구분'] || '').trim();
+    var c = bizClass(row);
+    if (!c.kind) return null;
+    if (c.kind === '법인사업자' && cur !== '법인사업자')
+      return { cur: cur || '(빈칸)', want: '법인사업자', why: c.why };
+    if (c.kind === '개인사업자' && cur !== '개인사업자' && cur !== '법인사업자')
+      return { cur: cur || '(빈칸)', want: '개인사업자 또는 법인사업자', why: c.why };
+    return null;
+  }
+
+  /* ── 종이청구서 대상 ────────────────────────────────────────────────
+     만65세 이상 · 외국인 · 법인(법인사업자 — 관청·정식단체·고유번호 포함)은 종이청구서를
+     고를 수 있어서, 이메일이 없어도 임의메일이 아니라 종이청구서로 해야 한다.
+     개인사업자는 대상이 아니다. 고객구분 열이 있으면 그 값을 쓰고, 법인 근거가
+     있는데 구분이 틀린 건 위의 bizClass 로도 잡는다. */
+
+  /* 주민번호 → { birth: Date, foreign: bool|null } 또는 null
+     7번째 자리: 1·2·5·6 → 1900년대, 3·4·7·8 → 2000년대, 5~8 → 외국인, 0 → 법인등록번호.
+     뒷자리가 가려져(770330-*******) 7번째 자리가 없으면 연도로 세기를 짐작한다. */
+  function idInfo(v, today) {
     var d = digits(v);
-    if (d.length < 7) return null;
-    var g = +d.charAt(6);
-    var cent = (g === 1 || g === 2 || g === 5 || g === 6) ? 1900 : (g === 3 || g === 4 || g === 7 || g === 8) ? 2000 : 1800;
-    var y = cent + +d.slice(0, 2), m = +d.slice(2, 4), day = +d.slice(4, 6);
+    if (d.length < 6) return null;
+    var yy = +d.slice(0, 2), m = +d.slice(2, 4), day = +d.slice(4, 6);
     if (!m || m > 12 || !day || day > 31) return null;
-    return { birth: new Date(y, m - 1, day), foreign: g >= 5 && g <= 8 };
+    var g = d.length >= 7 ? +d.charAt(6) : null;
+    if (g === 0 || g === 9) return null;                      // 법인등록번호 등 — 사람이 아니다
+    var cent;
+    if (g === null) cent = yy > (today || new Date()).getFullYear() % 100 ? 1900 : 2000;
+    else cent = (g === 1 || g === 2 || g === 5 || g === 6) ? 1900 : 2000;
+    return { birth: new Date(cent + yy, m - 1, day), foreign: g === null ? null : (g >= 5 && g <= 8) };
   }
 
   function fullAge(birth, today) {
@@ -582,20 +660,16 @@
   function paperEligible(row, today) {
     today = today || new Date();
     var why = [];
-    var info = idInfo(row['주민번호']);
+    var cls = String(row['고객구분'] || '').trim();
+    var biz = bizClass(row);
+    var corp = cls === '법인사업자' || biz.kind === '법인사업자';
+    var info = corp ? null : idInfo(row['주민번호'], today);   // 법인은 나이를 따지지 않는다
     if (info) {
       var age = fullAge(info.birth, today);
       if (age >= 65) why.push('만 ' + age + '세');
-      if (info.foreign) why.push('외국인');
     }
-    var etc = String(row['기타'] || '');
-    var bizNo = digits(row['사업자번호']) || digits((/사업자번호[^:：\n]*[:：][ \t]*([\d\- ]{10,14})/.exec(etc) || [])[1]);
-    var boss = String(row['대표자'] || '').trim() ||
-               ((/대표자명?[^:：\n]*[:：][ \t]*([^\n■]*)/.exec(etc) || [])[1] || '').trim();
-    var name = String(row['고객명'] || '').split('/')[0];
-    if (BUSINESS_NAME.test(name)) why.push('법인·단체(이름)');
-    else if (bizNo.length >= 10) why.push('사업자(사업자번호)');
-    else if (boss) why.push('사업자(대표자)');
+    if (cls === '외국인' || (info && info.foreign)) why.push('외국인');
+    if (corp) why.push(cls === '법인사업자' ? '법인사업자' : '법인(' + biz.short + ')');
     return why;
   }
 
@@ -606,7 +680,7 @@
       var f = BILL_FIELD.exec(e.content);
       var sig = null;
       if (f) {
-        sig = { arbitrary: BILL_ARBITRARY.test(f[1]), value: f[1].trim() };
+        sig = { arbitrary: billArbitrary(f[1]), value: f[1].trim() };
         // 서식지도 고객메모라 'ㅇ기타 : 이메일누락 임의메일진행 …' 처럼 같이 적어 두면 안내한 것이다
         if (!notice && BILL_NOTICE.test(e.content.replace(f[0], ''))) notice = e;
       } else {
@@ -745,6 +819,7 @@
     hasCouponTag: hasCouponTag, contractNo: contractNo, giftEligible: giftEligible,
     GIFT_POLICY: GIFT_POLICY, giftCodeIn: giftCodeIn, giftFieldLatest: giftFieldLatest,
     billingCheck: billingCheck, paperEligible: paperEligible,
+    bizClass: bizClass, bizClassCheck: bizClassCheck,
     isKtAuth: isKtAuth
   };
 })(window);
