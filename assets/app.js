@@ -225,6 +225,7 @@
         var b = R.billingCheck(r, historyByCust[ck]);
         if (!b) return;
         r._billReason = b.reason;
+        r._billPaper = b.paper || '';
         r._billValue = b.value;
         r._billWho = b.ts + '  ' + (b.author || '');
         findings.billing.push(r);

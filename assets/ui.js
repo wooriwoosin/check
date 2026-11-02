@@ -171,7 +171,8 @@
         key: 'bill', label: '임의메일진행 전달누락', rows: c.billing, tone: 'c',
         cols: [['행', function (r) { return r._r; }], ['고객명', '고객명'], ['생년월일', birth],
           ['개통상태', '개통상태'], ['인증', '고객인증(값)'], ['이메일', '이메일'],
-          ['ㅇ청구매체 값', '_billValue', 'wrap'], ['적은 시각·작성자', '_billWho'],
+          ['종이청구서 대상', '_billPaper'],
+          ['근거 (ㅇ청구매체 값 또는 메모)', '_billValue', 'wrap'], ['적은 시각·작성자', '_billWho'],
           ['사유', '_billReason', 'wrap']]
       },
       {

@@ -551,8 +551,56 @@
   /* 판매점에 알린 흔적 — 임의·임시메일이나 이메일 누락·오류를 말한 메모 하나면 된다 */
   var BILL_NOTICE = /(임의|임시)\s*(이\s*)?(메일|멜)|(이\s*)?메일\s*(주소\s*)?(누락|오류|없|미기재|공란)/;
 
-  /* null 또는 { reason, value, ts, author } */
-  function billingCheck(row, history) {
+  /* ── 종이청구서 대상 ────────────────────────────────────────────────
+     만65세 이상 · 외국인 · 개인이 아닌 고객(법인·관청·정식단체 등)은 종이청구서를
+     고를 수 있어서, 이메일이 없어도 임의메일이 아니라 종이청구서로 해야 한다.
+     ※ 개인사업자는 원래 대상이 아닌데, 지금 로우데이터로는 법인과 구분이 어려워
+       '개인이 아닌 것' 은 일단 다 잡는다. 로우데이터를 손보면 BUSINESS_NAME 이나
+       paperEligible 의 사업자 판정만 고치면 된다. */
+  var BUSINESS_NAME = /주식회사|\(주\)|㈜|유한회사|\(유\)|합자회사|합명회사|재단|법인|협회|조합|공단|공사$|교회|성당|사찰|학교|어린이집|유치원|시청|구청|군청|도청|주민센터|행정복지센터|관리사무소|입주자대표|단체/;
+
+  /* 주민번호 → { birth: Date, foreign: bool } 또는 null
+     7번째 자리: 1·2·5·6 → 1900년대, 3·4·7·8 → 2000년대, 9·0 → 1800년대, 5~8 → 외국인 */
+  function idInfo(v) {
+    var d = digits(v);
+    if (d.length < 7) return null;
+    var g = +d.charAt(6);
+    var cent = (g === 1 || g === 2 || g === 5 || g === 6) ? 1900 : (g === 3 || g === 4 || g === 7 || g === 8) ? 2000 : 1800;
+    var y = cent + +d.slice(0, 2), m = +d.slice(2, 4), day = +d.slice(4, 6);
+    if (!m || m > 12 || !day || day > 31) return null;
+    return { birth: new Date(y, m - 1, day), foreign: g >= 5 && g <= 8 };
+  }
+
+  function fullAge(birth, today) {
+    var a = today.getFullYear() - birth.getFullYear();
+    if (today.getMonth() < birth.getMonth() ||
+        (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) a--;
+    return a;
+  }
+
+  /* 종이청구서를 고를 수 있는 이유 목록. 해당 없으면 빈 배열. today 는 테스트용. */
+  function paperEligible(row, today) {
+    today = today || new Date();
+    var why = [];
+    var info = idInfo(row['주민번호']);
+    if (info) {
+      var age = fullAge(info.birth, today);
+      if (age >= 65) why.push('만 ' + age + '세');
+      if (info.foreign) why.push('외국인');
+    }
+    var etc = String(row['기타'] || '');
+    var bizNo = digits(row['사업자번호']) || digits((/사업자번호[^:：\n]*[:：][ \t]*([\d\- ]{10,14})/.exec(etc) || [])[1]);
+    var boss = String(row['대표자'] || '').trim() ||
+               ((/대표자명?[^:：\n]*[:：][ \t]*([^\n■]*)/.exec(etc) || [])[1] || '').trim();
+    var name = String(row['고객명'] || '').split('/')[0];
+    if (BUSINESS_NAME.test(name)) why.push('법인·단체(이름)');
+    else if (bizNo.length >= 10) why.push('사업자(사업자번호)');
+    else if (boss) why.push('사업자(대표자)');
+    return why;
+  }
+
+  /* null 또는 { reason, value, ts, author, paper } */
+  function billingCheck(row, history, today) {
     var latest = null, notice = null;
     historyEntries(history).forEach(function (e) {
       var f = BILL_FIELD.exec(e.content);
@@ -569,7 +617,14 @@
       if (sig && (!latest || e.ts >= latest.ts)) { sig.ts = e.ts; sig.author = e.author; latest = sig; }
     });
     if (!latest || !latest.arbitrary) return null;
-    var out = { value: latest.value, ts: latest.ts, author: latest.author };
+    var paper = paperEligible(row, today);
+    var out = { value: latest.value, ts: latest.ts, author: latest.author, paper: paper.join(' · ') };
+    /* 종이청구서 대상이면 안내를 남겼어도 임의메일 자체가 잘못이다 */
+    if (paper.length) {
+      out.reason = '종이청구서 대상(' + out.paper + ')인데 임의메일 진행' +
+        (isKtAuth(row) ? ' · KT 휴대폰이라 모바일청구서(MMS)도 가능' : '');
+      return out;
+    }
     if (isKtAuth(row)) {
       out.reason = 'KT 휴대폰인데 임의메일 진행 — 모바일청구서(MMS) 가능';
       return out;
@@ -689,7 +744,7 @@
     checkServiceNo: checkServiceNo, isActive: isActive, ACTIVE_STATUS: ACTIVE_STATUS,
     hasCouponTag: hasCouponTag, contractNo: contractNo, giftEligible: giftEligible,
     GIFT_POLICY: GIFT_POLICY, giftCodeIn: giftCodeIn, giftFieldLatest: giftFieldLatest,
-    billingCheck: billingCheck,
+    billingCheck: billingCheck, paperEligible: paperEligible,
     isKtAuth: isKtAuth
   };
 })(window);
